@@ -1,5 +1,6 @@
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
+import OwnerDashboard from './pages/OwnerDashboard';
 
 function AppInner() {
   const { firebaseUser, profile, loading, logout } = useAuth();
@@ -10,9 +11,23 @@ function AppInner() {
     return <Login />;
   }
 
-  // نجاح الدخول — عرض تأكيد مبدئي فقط (المرحلة 2 مقصورة على تسجيل الدخول)
-const roleLabels = { owner: 'Admin', admin: 'إدارة المدرسة', teacher: 'معلّمة', parent: 'ولي أمر' };
+  if (profile.role === 'owner') {
+    return (
+      <div>
+        <div style={{ textAlign: 'left', padding: 12 }} dir="rtl">
+          <button
+            onClick={logout}
+            style={{ padding: '8px 16px', background: '#a10000', color: '#fff', border: 'none', borderRadius: 8 }}
+          >
+            تسجيل خروج
+          </button>
+        </div>
+        <OwnerDashboard />
+      </div>
+    );
+  }
 
+  const roleLabels = { admin: 'إدارة المدرسة', teacher: 'معلّمة', parent: 'ولي أمر' };
 
   return (
     <div style={{ maxWidth: 420, margin: '60px auto', padding: 16, textAlign: 'center' }} dir="rtl">
