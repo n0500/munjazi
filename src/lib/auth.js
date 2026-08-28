@@ -6,8 +6,6 @@ import {
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 
-// ---------- shared helpers ----------
-
 async function sha256Hex(text) {
   const data = new TextEncoder().encode(text.trim());
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -30,8 +28,6 @@ async function loadUserDoc(uid) {
   return { uid, ...data };
 }
 
-// ---------- مالكة المنصة ----------
-
 export async function loginOwner(email, password) {
   const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
   const user = await loadUserDoc(cred.user.uid);
@@ -41,8 +37,6 @@ export async function loginOwner(email, password) {
   }
   return user;
 }
-
-// ---------- إدارة المدرسة ----------
 
 export async function loginAdmin(email, password) {
   const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
@@ -54,8 +48,6 @@ export async function loginAdmin(email, password) {
   return user;
 }
 
-// ---------- معلّمة ----------
-
 export async function loginTeacher(email, password) {
   const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
   const user = await loadUserDoc(cred.user.uid);
@@ -66,22 +58,20 @@ export async function loginTeacher(email, password) {
   return user;
 }
 
-// ---------- ولي أمر (دخول بالسجل المدني فقط) ----------
-
-export async function loginParent(schoolCode, nationalId) {
+export async function loginParent(nationalId) {
   const trimmedId = nationalId.trim();
   if (!/^[0-9]{10}$/.test(trimmedId)) {
     throw new Error('السجل المدني يجب أن يتكوّن من 10 أرقام.');
   }
 
-  const hash = await sha256Hex(`${schoolCode.trim().toUpperCase()}:${trimmedId}`);
+  const hash = await sha256Hex(trimmedId);
   const lookupSnap = await getDoc(doc(db, 'studentsByNationalId', hash));
   if (!lookupSnap.exists()) {
-    throw new Error('لم يتم العثور على طالبة بهذا السجل المدني في هذه المدرسة.');
+    throw new Error('لم يتم العثور على طالبة بهذا السجل المدني.');
   }
   const { schoolId, studentId } = lookupSnap.data();
 
-  const pseudoEmail = `${trimmedId}@${schoolCode.trim().toLowerCase()}.parents.munjazi.local`;
+  const pseudoEmail = `${trimmedId}@parents.munjazi.local`;
 
   try {
     const cred = await signInWithEmailAndPassword(auth, pseudoEmail, trimmedId);
@@ -103,8 +93,6 @@ export async function loginParent(schoolCode, nationalId) {
     return await loadUserDoc(cred.user.uid);
   }
 }
-
-// ---------- تسجيل خروج عام ----------
 
 export async function logout() {
   await firebaseSignOut(auth);
