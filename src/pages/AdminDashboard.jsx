@@ -133,7 +133,7 @@ export default function AdminDashboard({ schoolId }) {
     setTimeout(() => setLinkCopied(false), 3000);
   }
 
-  if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جاري التحميل</p>;
+  if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
   if (selectedClassId) {
     return (
@@ -150,14 +150,14 @@ export default function AdminDashboard({ schoolId }) {
     <div style={{ maxWidth: 600, margin: '20px auto', padding: 16 }} dir="rtl">
       <h1>{school?.name || 'لوحة الإدارة'}</h1>
       <p style={{ color: '#666' }}>
-        رمز المدرسة: <strong style={{ fontFamily: 'monospace' }}>{school?.schoolCode}</strong> — سلّميه للمعلّمات عشان يسجّلن حساباتهن
+        رمز المدرسة: <strong style={{ fontFamily: 'monospace' }}>{school?.schoolCode}</strong> — يُرجى تسليمه للمعلّمات لإنشاء حساباتهن
       </p>
 
       <div style={{ marginBottom: 20 }}>
         <button onClick={handleCopyParentLink} style={{ padding: '10px 16px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8 }}>
           نسخ رابط ولي الأمر
         </button>
-        {linkCopied && <span style={{ marginRight: 10, color: '#0b5c33' }}>تم النسخ ✅</span>}
+        {linkCopied && <span style={{ marginRight: 10, color: '#0b5c33' }}>تم النسخ بنجاح ✅</span>}
       </div>
 
       {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16 }}>{error}</div>}
@@ -174,7 +174,7 @@ export default function AdminDashboard({ schoolId }) {
 
       <h3>الفصول ({classes.length})</h3>
       {classes.length === 0 ? (
-        <p style={{ color: '#666' }}>ما فيه فصول بعد.</p>
+        <p style={{ color: '#666' }}>لا توجد فصول بعد.</p>
       ) : (
         classes.map((c) => (
           <div key={c.id} style={{ border: '1px solid #eee', borderRadius: 8, marginBottom: 10, padding: 12 }}>
@@ -204,7 +204,7 @@ export default function AdminDashboard({ schoolId }) {
                 ))}
                 <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                   <select value={assignTeacherUid} onChange={(e) => setAssignTeacherUid(e.target.value)} style={{ flex: 1, padding: 6, minWidth: 140 }}>
-                    <option value="">اختاري معلّمة</option>
+                    <option value="">اختيار معلّمة</option>
                     {teachers.map((t) => (
                       <option key={t.uid} value={t.uid}>{t.displayName}</option>
                     ))}
@@ -222,7 +222,7 @@ export default function AdminDashboard({ schoolId }) {
 
       <h3 style={{ marginTop: 24 }}>المعلّمات ({teachers.length})</h3>
       {teachers.length === 0 ? (
-        <p style={{ color: '#666' }}>ما فيه معلّمات مسجّلات بعد.</p>
+        <p style={{ color: '#666' }}>لا توجد معلّمات مسجَّلات بعد.</p>
       ) : (
         teachers.map((t) => (
           <div key={t.uid} style={{ padding: '8px 0', borderTop: '1px solid #eee' }}>
