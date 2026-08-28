@@ -2,19 +2,21 @@ import { useEffect, useState } from 'react';
 import { listSkillsForWeek, createSkill } from '../lib/skillsApi';
 import { listAssessmentsForSkill, setAssessment, setAllMasteredForSkill } from '../lib/assessmentsApi';
 import { listClassStudents } from '../lib/studentsApi';
+import {
+  STATUS_LABELS,
+  pickRandomEncouragement,
+  listAllRecommendationsForStatus,
+  addCustomRecommendation,
+} from '../lib/recommendationsApi';
 
-const STATUS_LABELS = {
-  mastered: 'متقنة',
-  needsSupport: 'تحتاج دعم',
-  notMastered: 'غير متقنة',
-  absent: 'غائبة',
-};
 const TYPE_LABELS = { measurement: 'قياس', remediation: 'معالجة' };
+const NEW_RECOMMENDATION_VALUE = '__new__';
 
 export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack }) {
   const [students, setStudents] = useState([]);
   const [skills, setSkills] = useState([]);
   const [assessmentsBySkill, setAssessmentsBySkill] = useState({});
+  const [recommendationsByStatus, setRecommendationsByStatus] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -38,6 +40,14 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
         }),
       );
       setAssessmentsBySkill(assessMap);
+
+      const recMap = {};
+      await Promise.all(
+        ['needsSupport', 'notMastered', 'absent'].map(async (status) => {
+          recMap[status] = await listAllRecommendationsForStatus(schoolId, teacherUid, status);
+        }),
+      );
+      setRecommendationsByStatus(recMap);
     } catch (err) {
       setError(err.message || 'تعذّر تحميل بيانات الأسبوع الدراسي.');
     } finally {
@@ -66,16 +76,46 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
     }
   }
 
+  async function saveCell(skillId, studentId, status, recommendationText) {
+    await setAssessment(schoolId, { skillId, weekId: week.id, classId, teacherUid, studentId, status, recommendationText });
+    setAssessmentsBySkill((prev) => ({
+      ...prev,
+      [skillId]: { ...prev[skillId], [studentId]: { ...(prev[skillId]?.[studentId] || {}), status, recommendationText } },
+    }));
+  }
+
   async function handleStatusChange(skillId, studentId, status) {
     setError('');
     try {
-      await setAssessment(schoolId, { skillId, weekId: week.id, classId, teacherUid, studentId, status });
-      setAssessmentsBySkill((prev) => ({
-        ...prev,
-        [skillId]: { ...prev[skillId], [studentId]: { ...(prev[skillId]?.[studentId] || {}), status } },
-      }));
+      if (status === 'mastered') {
+        await saveCell(skillId, studentId, status, pickRandomEncouragement());
+      } else {
+        await saveCell(skillId, studentId, status, '');
+      }
     } catch (err) {
       setError(err.message || 'تعذّر حفظ التقييم.');
+    }
+  }
+
+  async function handleRecommendationChange(skillId, studentId, status, value) {
+    setError('');
+    if (value === NEW_RECOMMENDATION_VALUE) {
+      const text = window.prompt('اكتبي نص التوصية الجديدة:');
+      if (!text || !text.trim()) return;
+      try {
+        await addCustomRecommendation(schoolId, teacherUid, status, text);
+        const updated = await listAllRecommendationsForStatus(schoolId, teacherUid, status);
+        setRecommendationsByStatus((prev) => ({ ...prev, [status]: updated }));
+        await saveCell(skillId, studentId, status, text.trim());
+      } catch (err) {
+        setError(err.message || 'تعذّر إضافة التوصية.');
+      }
+      return;
+    }
+    try {
+      await saveCell(skillId, studentId, status, value);
+    } catch (err) {
+      setError(err.message || 'تعذّر حفظ التوصية.');
     }
   }
 
@@ -124,7 +164,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
             <tr>
               <th style={{ padding: 8, textAlign: 'right', borderBottom: '2px solid #ddd', position: 'sticky', right: 0, background: '#fff' }}>الطالبة</th>
               {skills.map((s) => (
-                <th key={s.id} style={{ padding: 8, borderBottom: '2px solid #ddd', minWidth: 140 }}>
+                <th key={s.id} style={{ padding: 8, borderBottom: '2px solid #ddd', minWidth: 160 }}>
                   <div>{s.title}</div>
                   <button onClick={() => handleSetAllMastered(s.id)} style={{ marginTop: 4, padding: '2px 8px', fontSize: 11, background: '#eaf6ee', border: '1px solid #0b7a4b', color: '#0b5c33', borderRadius: 6 }}>
                     تعيين الكل: متقنة
@@ -138,7 +178,9 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
               <tr key={student.id} style={{ borderBottom: '1px solid #eee' }}>
                 <td style={{ padding: 8, position: 'sticky', right: 0, background: '#fff' }}>{student.name}</td>
                 {skills.map((s) => {
-                  const current = assessmentsBySkill[s.id]?.[student.id]?.status || '';
+                  const cell = assessmentsBySkill[s.id]?.[student.id] || {};
+                  const current = cell.status || '';
+                  const showRecommendation = current && current !== 'mastered';
                   return (
                     <td key={s.id} style={{ padding: 6, textAlign: 'center' }}>
                       <select
@@ -151,6 +193,19 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
                           <option key={val} value={val}>{label}</option>
                         ))}
                       </select>
+                      {showRecommendation && (
+                        <select
+                          value={cell.recommendationText || ''}
+                          onChange={(e) => handleRecommendationChange(s.id, student.id, current, e.target.value)}
+                          style={{ padding: 4, width: '100%', marginTop: 4, fontSize: 12 }}
+                        >
+                          <option value="">اختيار توصية</option>
+                          {(recommendationsByStatus[current] || []).map((rec) => (
+                            <option key={rec.id} value={rec.text}>{rec.text}</option>
+                          ))}
+                          <option value={NEW_RECOMMENDATION_VALUE}>+ إضافة توصية جديدة</option>
+                        </select>
+                      )}
                     </td>
                   );
                 })}
