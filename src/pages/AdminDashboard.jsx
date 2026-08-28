@@ -17,6 +17,7 @@ export default function AdminDashboard({ schoolId }) {
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const [className, setClassName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -125,6 +126,13 @@ export default function AdminDashboard({ schoolId }) {
     }
   }
 
+  function handleCopyParentLink() {
+    const link = `${window.location.origin}${window.location.pathname}?role=parent`;
+    navigator.clipboard.writeText(link);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 3000);
+  }
+
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جاري التحميل</p>;
 
   if (selectedClassId) {
@@ -144,6 +152,13 @@ export default function AdminDashboard({ schoolId }) {
       <p style={{ color: '#666' }}>
         رمز المدرسة: <strong style={{ fontFamily: 'monospace' }}>{school?.schoolCode}</strong> — سلّميه للمعلّمات عشان يسجّلن حساباتهن
       </p>
+
+      <div style={{ marginBottom: 20 }}>
+        <button onClick={handleCopyParentLink} style={{ padding: '10px 16px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8 }}>
+          نسخ رابط ولي الأمر
+        </button>
+        {linkCopied && <span style={{ marginRight: 10, color: '#0b5c33' }}>تم النسخ ✅</span>}
+      </div>
 
       {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16 }}>{error}</div>}
 
