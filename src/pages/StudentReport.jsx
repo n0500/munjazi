@@ -127,7 +127,11 @@ export default function StudentReport({ schoolId, classId, teacherUid, className
             {reportData.weeks.map((w) => (
               <div key={w.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                 <h3 style={{ margin: '0 0 8px' }}>{w.name} — {w.typeLabel}</h3>
-                {w.enrichmentLink && <p style={{ fontSize: 12 }}>الرابط الإثرائي: {w.enrichmentLink}</p>}
+                {w.enrichmentLink && (
+                  <p style={{ fontSize: 12 }}>
+                    الرابط الإثرائي: <a href={w.enrichmentLink} target="_blank" rel="noreferrer">{w.enrichmentLink}</a>
+                  </p>
+                )}
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr>
