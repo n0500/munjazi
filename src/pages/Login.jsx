@@ -4,9 +4,9 @@ import { registerSchoolAdmin } from '../lib/schoolAdminApi';
 import { registerTeacher } from '../lib/teachersApi';
 
 const TABS = [
-  { key: 'admin', label: 'إدارة' },
-  { key: 'teacher', label: 'معلمة' },
-  { key: 'parent', label: 'ولي أمر' },
+  { key: 'admin', label: 'الإدارة' },
+  { key: 'teacher', label: 'المعلّمة' },
+  { key: 'parent', label: 'ولي الأمر' },
 ];
 
 export default function Login() {
@@ -123,12 +123,12 @@ export default function Login() {
           <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
           <p style={{ textAlign: 'center', marginTop: 12 }}>
             <button type="button" onClick={() => { setRegisterMode(true); resetMsgs(); }} style={linkStyle}>
-              {tab === 'admin' ? 'إنشاء حساب إدارة جديد' : 'إنشاء حساب معلّمة جديد'}
+              {tab === 'admin' ? 'إنشاء حساب إدارة جديد' : 'إنشاء حساب معلّمة جديدة'}
             </button>
           </p>
           {tab === 'admin' && (
             <p style={{ textAlign: 'center', marginTop: 4 }}>
-              <button type="button" onClick={() => setOwnerMode(true)} style={linkStyleMuted}>Admin يدخل من هنا أيضًا</button>
+              <button type="button" onClick={() => setOwnerMode(true)} style={linkStyleMuted}>يمكن لحساب Admin تسجيل الدخول من هنا أيضًا</button>
             </p>
           )}
         </form>
@@ -138,7 +138,7 @@ export default function Login() {
         <form onSubmit={handleRegister}>
           <label>رمز المدرسة</label>
           <input type="text" value={schoolCode} onChange={(e) => setSchoolCode(e.target.value)} style={inputStyle} required />
-          <label>اسمك</label>
+          <label>الاسم</label>
           <input type="text" value={regName} onChange={(e) => setRegName(e.target.value)} style={inputStyle} />
           <label>البريد الإلكتروني</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
@@ -146,7 +146,7 @@ export default function Login() {
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required minLength={6} />
           <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'إنشاء الحساب'}</button>
           <p style={{ textAlign: 'center', marginTop: 12 }}>
-            <button type="button" onClick={() => { setRegisterMode(false); resetMsgs(); }} style={linkStyleMuted}>رجوع لتسجيل الدخول</button>
+            <button type="button" onClick={() => { setRegisterMode(false); resetMsgs(); }} style={linkStyleMuted}>العودة إلى تسجيل الدخول</button>
           </p>
         </form>
       )}
@@ -159,14 +159,14 @@ export default function Login() {
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
           <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
           <p style={{ textAlign: 'center', marginTop: 12 }}>
-            <button type="button" onClick={() => setOwnerMode(false)} style={linkStyleMuted}>رجوع</button>
+            <button type="button" onClick={() => setOwnerMode(false)} style={linkStyleMuted}>عودة</button>
           </p>
         </form>
       )}
 
       {!ownerMode && tab === 'parent' && (
         <form onSubmit={handleParentSubmit}>
-          <label>السجل المدني (10 أرقام)</label>
+          <label>رقم السجل المدني (عشرة أرقام)</label>
           <input type="text" inputMode="numeric" value={nationalId} onChange={(e) => setNationalId(e.target.value)} style={inputStyle} required autoFocus />
           <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
         </form>
