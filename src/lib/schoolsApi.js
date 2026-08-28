@@ -3,6 +3,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  getDoc,
   getDocs,
   query,
   where,
@@ -11,7 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // بدون أحرف/أرقام متشابهة (0/O, 1/I)
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 function randomCode(length = 6) {
   let out = '';
@@ -56,6 +57,29 @@ export async function createSchool({ name, principalName }) {
 export async function setSchoolActive(schoolId, active) {
   await updateDoc(doc(db, 'schools', schoolId), {
     active,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function getSchool(schoolId) {
+  const snap = await getDoc(doc(db, 'schools', schoolId));
+  if (!snap.exists()) throw new Error('لم يتم العثور على المدرسة.');
+  return { id: snap.id, ...snap.data() };
+}
+
+export async function listSchoolAdmins(schoolId) {
+  const q = query(
+    collection(db, 'users'),
+    where('role', '==', 'admin'),
+    where('schoolId', '==', schoolId),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+}
+
+export async function setUserDisabled(uid, disabled) {
+  await updateDoc(doc(db, 'users', uid), {
+    disabled,
     updatedAt: serverTimestamp(),
   });
 }
