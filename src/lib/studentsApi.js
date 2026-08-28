@@ -47,7 +47,7 @@ async function createOneStudent(schoolId, classId, name, nationalId) {
   const trimmedName = (name || '').trim();
   const trimmedId = (nationalId || '').trim();
   if (!trimmedName) throw new Error('اسم الطالبة مطلوب.');
-  if (!/^[0-9]{10}$/.test(trimmedId)) throw new Error('السجل المدني يجب أن يتكوّن من 10 أرقام.');
+  if (!/^[0-9]{10}$/.test(trimmedId)) throw new Error('يجب أن يتكوّن رقم السجل المدني من عشرة أرقام.');
 
   const studentRef = doc(collection(db, 'schools', schoolId, 'students'));
   const batch = writeBatch(db);
@@ -100,7 +100,7 @@ export async function updateStudent(schoolId, studentId, { name, nationalId }) {
   });
   if (nationalId && nationalId.trim()) {
     const trimmedId = nationalId.trim();
-    if (!/^[0-9]{10}$/.test(trimmedId)) throw new Error('السجل المدني يجب أن يتكوّن من 10 أرقام.');
+    if (!/^[0-9]{10}$/.test(trimmedId)) throw new Error('يجب أن يتكوّن رقم السجل المدني من عشرة أرقام.');
     await updateDoc(doc(db, 'schools', schoolId, 'studentPrivate', studentId), {
       nationalId: trimmedId,
     });
@@ -115,4 +115,8 @@ export async function deleteStudent(schoolId, studentId) {
 }
 
 export async function moveStudent(schoolId, studentId, newClassId) {
-  await updateDoc(doc(db, 'schools', schoolId, 'students', student
+  await updateDoc(doc(db, 'schools', schoolId, 'students', studentId), {
+    currentClassId: newClassId,
+    updatedAt: serverTimestamp(),
+  });
+}
