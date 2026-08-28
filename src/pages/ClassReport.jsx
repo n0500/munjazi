@@ -63,7 +63,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
         setWeekReport(data);
         setRangeReport(null);
         await new Promise((resolve) => setTimeout(resolve, 100));
-        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-${week.name}.pdf`);
+        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-${week.name}.pdf`, 'l');
       } else {
         if (!fromWeekId || !toWeekId) { setGenerating(false); return; }
         const data = await buildClassRangeReportData(schoolId, {
@@ -78,7 +78,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
         setRangeReport(data);
         setWeekReport(null);
         await new Promise((resolve) => setTimeout(resolve, 100));
-        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-ملخص.pdf`);
+        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-ملخص.pdf`, 'l');
       }
     } catch (err) {
       setError(err.message || 'تعذّر توليد التقرير.');
@@ -141,7 +141,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
 
       {(weekReport || rangeReport) && (
         <div style={{ position: 'fixed', top: -99999, left: -99999 }}>
-          <div ref={reportRef} style={{ width: 750, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
+          <div ref={reportRef} style={{ width: 1050, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
             {weekReport && (
               <>
                 <div style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
