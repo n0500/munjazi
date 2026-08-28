@@ -10,7 +10,10 @@ const TABS = [
 ];
 
 export default function Login() {
-  const [tab, setTab] = useState('admin');
+  const params = new URLSearchParams(window.location.search);
+  const directParentLink = params.get('role') === 'parent';
+
+  const [tab, setTab] = useState(directParentLink ? 'parent' : 'admin');
   const [ownerMode, setOwnerMode] = useState(false);
   const [registerMode, setRegisterMode] = useState(false);
 
@@ -69,10 +72,10 @@ export default function Login() {
   async function handleParentSubmit(e) {
     e.preventDefault();
     resetMsgs();
-    if (!schoolCode.trim() || !nationalId.trim() || busy) return;
+    if (!nationalId.trim() || busy) return;
     setBusy(true);
     try {
-      await loginParent(schoolCode, nationalId);
+      await loginParent(nationalId);
     } catch (err) {
       setError(err.message || 'تعذّر تسجيل الدخول.');
     } finally {
@@ -89,7 +92,7 @@ export default function Login() {
     <div style={{ maxWidth: 420, margin: '40px auto', padding: 16 }} dir="rtl">
       <h1 style={{ textAlign: 'center' }}>منجزي</h1>
 
-      {!ownerMode && (
+      {!ownerMode && !directParentLink && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           {TABS.map((t) => (
             <button
@@ -163,10 +166,8 @@ export default function Login() {
 
       {!ownerMode && tab === 'parent' && (
         <form onSubmit={handleParentSubmit}>
-          <label>رمز المدرسة</label>
-          <input type="text" value={schoolCode} onChange={(e) => setSchoolCode(e.target.value)} style={inputStyle} required />
           <label>السجل المدني (10 أرقام)</label>
-          <input type="text" inputMode="numeric" value={nationalId} onChange={(e) => setNationalId(e.target.value)} style={inputStyle} required />
+          <input type="text" inputMode="numeric" value={nationalId} onChange={(e) => setNationalId(e.target.value)} style={inputStyle} required autoFocus />
           <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
         </form>
       )}
