@@ -2,6 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { listWeeksForClass } from '../lib/weeksApi';
 import { buildClassWeekReportData, buildClassRangeReportData } from '../lib/reportsApi';
 import { exportElementToPdf } from '../lib/pdfExport';
+import { STATUS_ICONS, STATUS_COLORS } from '../lib/recommendationsApi';
+
+function StatusBadge({ status, statusLabel }) {
+  if (!status) return <span>{statusLabel}</span>;
+  const colors = STATUS_COLORS[status];
+  return (
+    <span style={{ background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '2px 6px', fontWeight: 'bold', fontSize: 12, whiteSpace: 'nowrap' }}>
+      {STATUS_ICONS[status]} {statusLabel}
+    </span>
+  );
+}
 
 const STATUS_KEYS = [
   { key: 'mastered', label: 'متقنة' },
@@ -175,7 +186,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
                       <tr key={i}>
                         <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
                         {row.cells.map((c, j) => (
-                          <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}>{c.statusLabel}</td>
+                          <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
                         ))}
                         <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.recommendation}</td>
                       </tr>
@@ -224,7 +235,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
                             <tr key={i}>
                               <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
                               {row.cells.map((c, j) => (
-                                <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}>{c.statusLabel}</td>
+                                <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
                               ))}
                               <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.recommendation}</td>
                             </tr>
