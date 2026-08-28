@@ -17,6 +17,20 @@ export const STATUS_LABELS = {
   absent: 'غائبة',
 };
 
+export const STATUS_ICONS = {
+  mastered: '✅',
+  needsSupport: '⚠️',
+  notMastered: '❌',
+  absent: '🚫',
+};
+
+export const STATUS_COLORS = {
+  mastered: { bg: '#eaf6ee', text: '#0b5c33', border: '#0b7a4b' },
+  needsSupport: { bg: '#fff4e0', text: '#8a5a00', border: '#d99a00' },
+  notMastered: { bg: '#fdecea', text: '#a10000', border: '#c62828' },
+  absent: { bg: '#eee', text: '#444', border: '#999' },
+};
+
 // رسائل شكر وتشجيع تلقائية متنوعة — تُختار عشوائيًا عند تعيين حالة "متقنة"
 export const ENCOURAGEMENT_MESSAGES = [
   'أحسنتِ! إتقان رائع لهذه المهارة، استمري بهذا التميز.',
