@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listClasses, linkTeacherToClass, listTeacherAssignments, removeAssignment } from '../lib/classesApi';
 import ClassWeeks from './ClassWeeks';
+import RecommendationsLibrary from './RecommendationsLibrary';
 
 export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) {
   const [allClasses, setAllClasses] = useState([]);
@@ -13,6 +14,7 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
   const [linking, setLinking] = useState(false);
 
   const [openClassId, setOpenClassId] = useState(null);
+  const [showLibrary, setShowLibrary] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -68,6 +70,16 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
 
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
+  if (showLibrary) {
+    return (
+      <RecommendationsLibrary
+        schoolId={schoolId}
+        teacherUid={teacherUid}
+        onBack={() => setShowLibrary(false)}
+      />
+    );
+  }
+
   if (openClassId) {
     return (
       <ClassWeeks
@@ -82,7 +94,12 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
 
   return (
     <div style={{ maxWidth: 600, margin: '20px auto', padding: 16 }} dir="rtl">
-      <h1>لوحة المعلّمة</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1>لوحة المعلّمة</h1>
+        <button onClick={() => setShowLibrary(true)} style={{ padding: '8px 14px', background: '#f2f2f2', border: 'none', borderRadius: 8, fontSize: 13 }}>
+          مكتبة التوصيات
+        </button>
+      </div>
 
       {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16 }}>{error}</div>}
 
