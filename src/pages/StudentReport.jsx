@@ -3,6 +3,17 @@ import { listClassStudents } from '../lib/studentsApi';
 import { listWeeksForClass } from '../lib/weeksApi';
 import { buildStudentReportData } from '../lib/reportsApi';
 import { exportElementToPdf } from '../lib/pdfExport';
+import { STATUS_ICONS, STATUS_COLORS } from '../lib/recommendationsApi';
+
+function StatusBadge({ status, statusLabel }) {
+  if (!status) return <span>{statusLabel}</span>;
+  const colors = STATUS_COLORS[status];
+  return (
+    <span style={{ background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '2px 6px', fontWeight: 'bold', fontSize: 12, whiteSpace: 'nowrap' }}>
+      {STATUS_ICONS[status]} {statusLabel}
+    </span>
+  );
+}
 
 export default function StudentReport({ schoolId, classId, teacherUid, className, subject, teacherName, onBack }) {
   const [students, setStudents] = useState([]);
@@ -143,7 +154,7 @@ export default function StudentReport({ schoolId, classId, teacherUid, className
                     {w.skills.map((sk, i) => (
                       <tr key={i}>
                         <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{sk.title}</td>
-                        <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{sk.statusLabel}</td>
+                        <td style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={sk.status} statusLabel={sk.statusLabel} /></td>
                       </tr>
                     ))}
                   </tbody>
