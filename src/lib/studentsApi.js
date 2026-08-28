@@ -115,8 +115,4 @@ export async function deleteStudent(schoolId, studentId) {
 }
 
 export async function moveStudent(schoolId, studentId, newClassId) {
-  await updateDoc(doc(db, 'schools', schoolId, 'students', studentId), {
-    currentClassId: newClassId,
-    updatedAt: serverTimestamp(),
-  });
-}
+  await updateDoc(doc(db, 'schools', schoolId, 'students', student
