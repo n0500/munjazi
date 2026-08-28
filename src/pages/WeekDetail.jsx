@@ -3,7 +3,7 @@ import { listSkillsForWeek, createSkill } from '../lib/skillsApi';
 import { listAssessmentsForSkill, setAssessment, setAllMasteredForSkill } from '../lib/assessmentsApi';
 import { listClassStudents } from '../lib/studentsApi';
 import { updateWeek } from '../lib/weeksApi';
-import { STATUS_LABELS, listAllRecommendationsForStatus, addCustomRecommendation } from '../lib/recommendationsApi';
+import { STATUS_LABELS, STATUS_ICONS, STATUS_COLORS, listAllRecommendationsForStatus, addCustomRecommendation } from '../lib/recommendationsApi';
 import {
   listRecommendationsForWeek,
   setWeekRecommendation,
@@ -272,16 +272,25 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
                     <td style={{ padding: 8, position: 'sticky', right: 0, background: '#fff' }}>{student.name}</td>
                     {skills.map((s) => {
                       const current = assessmentsBySkill[s.id]?.[student.id]?.status || '';
+                      const colors = current ? STATUS_COLORS[current] : null;
                       return (
                         <td key={s.id} style={{ padding: 6, textAlign: 'center' }}>
                           <select
                             value={current}
                             onChange={(e) => handleStatusChange(s.id, student.id, e.target.value)}
-                            style={{ padding: 4, width: '100%' }}
+                            style={{
+                              padding: 4,
+                              width: '100%',
+                              background: colors ? colors.bg : '#fff',
+                              color: colors ? colors.text : '#000',
+                              border: colors ? `1px solid ${colors.border}` : '1px solid #ccc',
+                              fontWeight: colors ? 'bold' : 'normal',
+                              borderRadius: 4,
+                            }}
                           >
                             <option value="">—</option>
                             {Object.entries(STATUS_LABELS).map(([val, label]) => (
-                              <option key={val} value={val}>{label}</option>
+                              <option key={val} value={val}>{STATUS_ICONS[val]} {label}</option>
                             ))}
                           </select>
                         </td>
