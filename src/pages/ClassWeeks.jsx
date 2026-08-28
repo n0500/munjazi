@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { listWeeksForClass, createWeek, copyWeek } from '../lib/weeksApi';
 import WeekDetail from './WeekDetail';
+import StudentReport from './StudentReport';
 
 const TYPE_LABELS = { measurement: 'قياس', remediation: 'معالجة' };
 
-export default function ClassWeeks({ schoolId, classId, teacherUid, className, onBack }) {
+export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName, className, subject, onBack }) {
   const [weeks, setWeeks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -20,6 +21,7 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, className, o
   const [copying, setCopying] = useState(false);
 
   const [selectedWeekId, setSelectedWeekId] = useState(null);
+  const [showReport, setShowReport] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -75,6 +77,20 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, className, o
     }
   }
 
+  if (showReport) {
+    return (
+      <StudentReport
+        schoolId={schoolId}
+        classId={classId}
+        teacherUid={teacherUid}
+        className={className}
+        subject={subject}
+        teacherName={teacherName}
+        onBack={() => setShowReport(false)}
+      />
+    );
+  }
+
   if (selectedWeekId) {
     const week = weeks.find((w) => w.id === selectedWeekId);
     return (
@@ -96,6 +112,9 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, className, o
         ← العودة إلى الفصول الدراسية
       </button>
       <h1>{className} — الأسابيع الدراسية</h1>
+      <button onClick={() => setShowReport(true)} style={{ padding: '8px 14px', background: '#f2f2f2', border: 'none', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>
+        تقرير طالبة
+      </button>
 
       {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 12 }}>{error}</div>}
 
