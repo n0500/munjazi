@@ -81,12 +81,15 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
   }
 
   if (openClassId) {
+    const assignment = myAssignments.find((a) => a.classId === openClassId);
     return (
       <ClassWeeks
         schoolId={schoolId}
         classId={openClassId}
         teacherUid={teacherUid}
+        teacherName={teacherName}
         className={classNameFor(openClassId)}
+        subject={assignment?.subject || ''}
         onBack={() => setOpenClassId(null)}
       />
     );
