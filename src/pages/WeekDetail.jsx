@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { listSkillsForWeek, createSkill } from '../lib/skillsApi';
 import { listAssessmentsForSkill, setAssessment, setAllMasteredForSkill } from '../lib/assessmentsApi';
 import { listClassStudents } from '../lib/studentsApi';
+import { updateWeek } from '../lib/weeksApi';
 import { STATUS_LABELS, listAllRecommendationsForStatus, addCustomRecommendation } from '../lib/recommendationsApi';
 import {
   listRecommendationsForWeek,
@@ -25,6 +26,10 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
   const [skillTitle, setSkillTitle] = useState('');
   const [addingSkill, setAddingSkill] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
+
+  const [editingLink, setEditingLink] = useState(false);
+  const [linkDraft, setLinkDraft] = useState(week.enrichmentLink || '');
+  const [savingLink, setSavingLink] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -170,6 +175,20 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
     }
   }
 
+  async function handleSaveLink() {
+    setError('');
+    setSavingLink(true);
+    try {
+      await updateWeek(schoolId, week.id, { name: week.name, type: week.type, enrichmentLink: linkDraft });
+      week.enrichmentLink = linkDraft.trim();
+      setEditingLink(false);
+    } catch (err) {
+      setError(err.message || 'تعذّر حفظ الرابط الإثرائي.');
+    } finally {
+      setSavingLink(false);
+    }
+  }
+
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
   return (
@@ -178,8 +197,32 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
         ← العودة إلى الأسابيع الدراسية
       </button>
       <h1>{week.name} — {TYPE_LABELS[week.type]}</h1>
-      {week.enrichmentLink && (
-        <p><a href={week.enrichmentLink} target="_blank" rel="noreferrer">الرابط الإثرائي لهذا الأسبوع</a></p>
+      {week.enrichmentLink && !editingLink && (
+        <p>
+          <a href={week.enrichmentLink} target="_blank" rel="noreferrer">الرابط الإثرائي لهذا الأسبوع</a>
+          {' '}
+          <button onClick={() => { setLinkDraft(week.enrichmentLink); setEditingLink(true); }} style={{ background: 'none', border: 'none', color: '#0b7a4b', fontSize: 12 }}>
+            (تعديل)
+          </button>
+        </p>
+      )}
+      {!week.enrichmentLink && !editingLink && (
+        <p>
+          <button onClick={() => { setLinkDraft(''); setEditingLink(true); }} style={{ background: 'none', border: 'none', color: '#0b7a4b', fontSize: 13 }}>
+            + إضافة رابط إثرائي
+          </button>
+        </p>
+      )}
+      {editingLink && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <input type="text" value={linkDraft} onChange={(e) => setLinkDraft(e.target.value)} placeholder="رابط إثرائي" style={{ flex: 1, padding: 8 }} />
+          <button onClick={handleSaveLink} disabled={savingLink} style={{ padding: '8px 14px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8 }}>
+            {savingLink ? '...' : 'حفظ'}
+          </button>
+          <button onClick={() => setEditingLink(false)} style={{ padding: '8px 14px', background: '#f2f2f2', border: 'none', borderRadius: 8 }}>
+            إلغاء
+          </button>
+        </div>
       )}
 
       {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 12 }}>{error}</div>}
