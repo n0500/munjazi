@@ -11,7 +11,8 @@ function AppInner() {
   }
 
   // نجاح الدخول — عرض تأكيد مبدئي فقط (المرحلة 2 مقصورة على تسجيل الدخول)
-  const roleLabels = { owner: 'مالكة المنصة', admin: 'إدارة المدرسة', teacher: 'معلّمة', parent: 'ولي أمر' };
+const roleLabels = { owner: 'Admin', admin: 'إدارة المدرسة', teacher: 'معلّمة', parent: 'ولي أمر' };
+
 
   return (
     <div style={{ maxWidth: 420, margin: '60px auto', padding: 16, textAlign: 'center' }} dir="rtl">
