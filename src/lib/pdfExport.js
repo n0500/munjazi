@@ -3,11 +3,11 @@ import html2canvas from 'html2canvas';
 
 // يحوّل عنصر HTML إلى PDF متعدد الصفحات، مع الحفاظ على أي روابط <a href> بداخله
 // قابلة للنقر فعليًا داخل ملف الـPDF (يشتغل تلقائيًا لأي تقرير يستخدم هذه الدالة)
-export async function exportElementToPdf(element, filename) {
+export async function exportElementToPdf(element, filename, orientation = 'p') {
   const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
   const imgData = canvas.toDataURL('image/png');
 
-  const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
 
