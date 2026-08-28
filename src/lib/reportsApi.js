@@ -80,7 +80,7 @@ export async function buildClassWeekReportData(schoolId, { classId, teacherUid, 
     const cells = skills.map((skill) => {
       const status = assessmentsBySkill[skill.id]?.[student.id]?.status || null;
       if (status && classCounts[status] !== undefined) classCounts[status] += 1;
-      return { title: skill.title, statusLabel: status ? STATUS_LABELS[status] : '—' };
+      return { title: skill.title, status, statusLabel: status ? STATUS_LABELS[status] : '—' };
     });
     return { name: student.name, cells, recommendation: weekRecs[student.id] || '' };
   });
@@ -127,7 +127,7 @@ export async function buildClassRangeReportData(schoolId, { classId, teacherUid,
       const cells = skills.map((skill) => {
         const status = assessmentsBySkill[skill.id]?.[student.id]?.status || null;
         if (status && classCounts[status] !== undefined) classCounts[status] += 1;
-        return { title: skill.title, statusLabel: status ? STATUS_LABELS[status] : '—' };
+        return { title: skill.title, status, statusLabel: status ? STATUS_LABELS[status] : '—' };
       });
       return { name: student.name, cells, recommendation: weekRecs[student.id] || '' };
     });
