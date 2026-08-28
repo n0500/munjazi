@@ -115,7 +115,8 @@ export default function Login() {
           {!ownerMode && (
             <p style={{ textAlign: 'center', marginTop: 12 }}>
               <button type="button" onClick={() => setOwnerMode(true)} style={{ background: 'none', border: 'none', color: '#0b7a4b', textDecoration: 'underline' }}>
-                حساب مالكة المنصة يدخل من هنا أيضًا
+               Admin يدخل من هنا أيضًا
+
               </button>
             </p>
           )}
