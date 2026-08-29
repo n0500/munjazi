@@ -148,7 +148,7 @@ function ClassOverviewCard({ schoolId, classId, teacherUid, className, subject }
   );
 }
 
-export default function TeacherOverview({ schoolId, teacherUid }) {
+export default function TeacherOverview({ schoolId, teacherUid, onBack }) {
   const [assignments, setAssignments] = useState([]);
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -179,6 +179,11 @@ export default function TeacherOverview({ schoolId, teacherUid }) {
 
   return (
     <div style={{ maxWidth: 600, margin: '20px auto', padding: 16 }} dir="rtl">
+      {onBack && (
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#0b7a4b', marginBottom: 10 }}>
+          ← العودة إلى لوحة المعلّمة
+        </button>
+      )}
       <h1>نظرة عامة</h1>
       {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16 }}>{error}</div>}
       {assignments.length === 0 ? (
