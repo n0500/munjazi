@@ -1,47 +1,60 @@
-import { useState } from "react";
-import { activateAction, deferAction } from "../lib/actionEngine";
+import { useState } from 'react';
+import { activateAction, deferAction } from '../lib/actionEngine';
 
 const TYPE_LABEL = {
-  remedial: { icon: "⚠", text: "علاجي" },
-  enrichment: { icon: "⭐", text: "إثرائي" },
+  remedial: { icon: '⚠', text: 'علاجي' },
+  enrichment: { icon: '⭐', text: 'إثرائي' },
 };
 
-export default function ActionColumn({ db, schoolId, classId, teacherId, studentName, actions, onChanged }) {
+export default function ActionColumn({ schoolId, teacherUid, studentName, actions, onChanged }) {
   const [openAction, setOpenAction] = useState(null);
 
   if (!actions || actions.length === 0) {
-    return <span className="text-gray-300 select-none">—</span>;
+    return <span style={{ color: '#ccc' }}>—</span>;
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      {actions.map((action) => (
-        <button
-          key={action.id}
-          onClick={() => setOpenAction(action)}
-          className={
-            "text-xs rounded-md px-2 py-1 text-right transition-colors " +
-            (action.status === "active"
-              ? action.type === "remedial"
-                ? "bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200"
-                : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
-              : "bg-gray-50 text-gray-700 hover:bg-gray-100 border border-dashed border-gray-300")
-          }
-        >
-          <span className="font-medium">{TYPE_LABEL[action.type].icon}</span>{" "}
-          {action.affectedSkills.map((s) => s.skillName).join("، ")}
-          <span className="text-[10px] mx-1 opacity-70">
-            {action.status === "active" ? "(نشط)" : "(مقترح)"}
-          </span>
-        </button>
-      ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {actions.map((action) => {
+        const label = TYPE_LABEL[action.type];
+        const isActive = action.status === 'active';
+        const bg = isActive
+          ? (action.type === 'remedial' ? '#fdf3e2' : '#eaf6ee')
+          : '#f5f5f5';
+        const border = isActive
+          ? (action.type === 'remedial' ? '#e0b25c' : '#0b7a4b')
+          : '#ccc';
+        const textColor = isActive
+          ? (action.type === 'remedial' ? '#8a5a00' : '#0b5c33')
+          : '#555';
+        return (
+          <button
+            key={action.id}
+            onClick={() => setOpenAction(action)}
+            style={{
+              fontSize: 12,
+              textAlign: 'right',
+              padding: '4px 8px',
+              borderRadius: 6,
+              background: bg,
+              border: `1px solid ${border}`,
+              color: textColor,
+              cursor: 'pointer',
+            }}
+          >
+            <span style={{ fontWeight: 'bold' }}>{label.icon}</span>{' '}
+            {action.affectedSkillTitles.join('، ')}
+            <span style={{ fontSize: 10, opacity: 0.7, marginRight: 4 }}>
+              {isActive ? '(نشط)' : '(مقترح)'}
+            </span>
+          </button>
+        );
+      })}
 
       {openAction && (
         <ActionModal
-          db={db}
           schoolId={schoolId}
-          classId={classId}
-          teacherId={teacherId}
+          teacherUid={teacherUid}
           studentName={studentName}
           action={openAction}
           onClose={() => setOpenAction(null)}
@@ -55,22 +68,20 @@ export default function ActionColumn({ db, schoolId, classId, teacherId, student
   );
 }
 
-function ActionModal({ db, schoolId, classId, teacherId, studentName, action, onClose, onChanged }) {
+function ActionModal({ schoolId, teacherUid, studentName, action, onClose, onChanged }) {
   const [text, setText] = useState(action.finalText || action.suggestedText);
   const [reviewDate, setReviewDate] = useState(defaultReviewDate());
   const [saving, setSaving] = useState(false);
 
-  const isPending = action.status === "suggested";
+  const isPending = action.status === 'suggested';
   const label = TYPE_LABEL[action.type];
 
   async function handleActivate() {
     setSaving(true);
     try {
-      await activateAction(db, {
-        schoolId,
-        classId,
+      await activateAction(schoolId, {
         actionId: action.id,
-        teacherId,
+        teacherUid,
         finalText: text,
         reviewDate,
       });
@@ -83,7 +94,7 @@ function ActionModal({ db, schoolId, classId, teacherId, studentName, action, on
   async function handleDefer() {
     setSaving(true);
     try {
-      await deferAction(db, { schoolId, classId, actionId: action.id });
+      await deferAction(schoolId, { actionId: action.id });
       onChanged();
     } finally {
       setSaving(false);
@@ -91,47 +102,48 @@ function ActionModal({ db, schoolId, classId, teacherId, studentName, action, on
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" dir="rtl">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-lg">{label.icon}</span>
-          <h3 className="font-semibold text-gray-900">
-            إجراء {label.text} — {studentName}
-          </h3>
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
+      }}
+      dir="rtl"
+    >
+      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 10px 30px rgba(0,0,0,0.2)', width: '100%', maxWidth: 420, padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: 18 }}>{label.icon}</span>
+          <h3 style={{ margin: 0, fontWeight: 600 }}>إجراء {label.text} — {studentName}</h3>
         </div>
 
-        <p className="text-xs text-gray-500 mb-4">
-          المهارات المتأثرة: {action.affectedSkills.map((s) => s.skillName).join("، ")}
+        <p style={{ fontSize: 12, color: '#777', marginBottom: 16 }}>
+          المهارات المتأثرة: {action.affectedSkillTitles.join('، ')}
           {action.deferCount > 0 && (
-            <span className="text-amber-600"> · تم تأجيله {action.deferCount} مرة</span>
+            <span style={{ color: '#b8860b' }}> · تم تأجيله {action.deferCount} مرة</span>
           )}
         </p>
 
-        <label className="block text-sm font-medium text-gray-700 mb-1">نص الإجراء</label>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>نص الإجراء</label>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={3}
-          className="w-full border border-gray-300 rounded-lg p-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          style={{ width: '100%', border: '1px solid #ccc', borderRadius: 8, padding: 8, fontSize: 13, marginBottom: 16 }}
         />
 
         {isPending && (
           <>
-            <label className="block text-sm font-medium text-gray-700 mb-1">تاريخ المراجعة المتوقع</label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>تاريخ المراجعة المتوقع</label>
             <input
               type="date"
               value={reviewDate}
               onChange={(e) => setReviewDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-2 text-sm mb-4"
+              style={{ width: '100%', border: '1px solid #ccc', borderRadius: 8, padding: 8, fontSize: 13, marginBottom: 16 }}
             />
           </>
         )}
 
-        <div className="flex gap-2 justify-end mt-2">
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg"
-          >
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+          <button onClick={onClose} style={{ padding: '6px 12px', fontSize: 13, color: '#777', background: 'none', border: 'none', borderRadius: 8 }}>
             إغلاق
           </button>
           {isPending && (
@@ -139,14 +151,14 @@ function ActionModal({ db, schoolId, classId, teacherId, studentName, action, on
               <button
                 onClick={handleDefer}
                 disabled={saving}
-                className="px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                style={{ padding: '6px 12px', fontSize: 13, color: '#333', border: '1px solid #ccc', background: '#fff', borderRadius: 8 }}
               >
                 تأجيل هذا الأسبوع
               </button>
               <button
                 onClick={handleActivate}
                 disabled={saving}
-                className="px-3 py-1.5 text-sm text-white bg-amber-600 rounded-lg hover:bg-amber-700"
+                style={{ padding: '6px 12px', fontSize: 13, color: '#fff', background: '#b8860b', border: 'none', borderRadius: 8 }}
               >
                 تفعيل الإجراء
               </button>
