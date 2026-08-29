@@ -59,7 +59,6 @@ export function detectRepeatedSkillsForStudent({
   return candidates;
 }
 
-// قوالب عامة فقط — نص واحد لكل نوع (علاجي/إثرائي) يصلح لأي مهارة
 export async function pickTemplateText(schoolId, { type, teacherUid }) {
   const snap = await getDocs(collection(db, 'schools', schoolId, 'actionTemplates'));
   const templates = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -73,7 +72,24 @@ export async function pickTemplateText(schoolId, { type, teacherUid }) {
   return type === 'remedial' ? 'إحالة لجلسة معالجة فردية' : 'ترشيح لنشاط إثرائي إضافي';
 }
 
-// الفحص ينشئ الإجراء "نشط" تلقائيا مباشرة — بدون خطوة موافقة يدوية
+export async function listActionTemplatesForType(schoolId, type) {
+  const snap = await getDocs(collection(db, 'schools', schoolId, 'actionTemplates'));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((t) => t.type === type);
+}
+
+export async function addActionTemplate(schoolId, { type, text, teacherUid }) {
+  const trimmed = (text || '').trim();
+  if (!trimmed) throw new Error('نص الإجراء مطلوب.');
+  await addDoc(collection(db, 'schools', schoolId, 'actionTemplates'), {
+    type,
+    text: trimmed,
+    createdBy: teacherUid,
+    createdAt: serverTimestamp(),
+  });
+}
+
 export async function checkAndSuggestActionsForWeek(schoolId, { classId, teacherUid, week, students }) {
   const previousWeek = await getPreviousWeek(schoolId, classId, teacherUid, week.id);
   if (!previousWeek) return [];
