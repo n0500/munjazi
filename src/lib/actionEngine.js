@@ -15,16 +15,11 @@ import { listSkillsForWeek } from './skillsApi';
 import { listAssessmentsForSkill } from './assessmentsApi';
 import { listWeeksForClass } from './weeksApi';
 
-// حالة "غير متقنة" تُفعّل إجراء علاجي، و"متقنة" تُفعّل إجراء إثرائي
 const REMEDIAL_STATUSES = ['notMastered'];
 const ENRICHMENT_STATUSES = ['mastered'];
 
-// ---------------------------------------------------------------------------
-// 1) إيجاد الأسبوع السابق مباشرة لنفس الفصل والمعلمة
-// ---------------------------------------------------------------------------
 export async function getPreviousWeek(schoolId, classId, teacherUid, currentWeekId) {
   const weeks = await listWeeksForClass(schoolId, classId, teacherUid);
-  // listWeeksForClass يرجعها الأحدث أولاً؛ نرتبها تصاعدياً لنجد اللي قبل الحالي مباشرة
   const ascending = [...weeks].sort(
     (a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0),
   );
@@ -33,9 +28,6 @@ export async function getPreviousWeek(schoolId, classId, teacherUid, currentWeek
   return ascending[idx - 1];
 }
 
-// ---------------------------------------------------------------------------
-// 2) اكتشاف تكرار حالة نفس المهارة (بالاسم) بين أسبوعين، لطالبة واحدة
-// ---------------------------------------------------------------------------
 export function detectRepeatedSkillsForStudent({
   studentId,
   currentSkills,
@@ -67,40 +59,21 @@ export function detectRepeatedSkillsForStudent({
   return candidates;
 }
 
-// ---------------------------------------------------------------------------
-// 3) اختيار نص القالب المقترح من مكتبة actionTemplates
-// ---------------------------------------------------------------------------
-export async function pickTemplateText(schoolId, { type, skillTitle, teacherUid }) {
+// قوالب عامة فقط — نص واحد لكل نوع (علاجي/إثرائي) يصلح لأي مهارة
+export async function pickTemplateText(schoolId, { type, teacherUid }) {
   const snap = await getDocs(collection(db, 'schools', schoolId, 'actionTemplates'));
   const templates = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-  const matches = (t, requireSkill, requireOwn) => {
-    if (t.type !== type) return false;
-    if (requireSkill && t.skillTitle !== skillTitle) return false;
-    if (!requireSkill && t.skillTitle) return false;
-    if (requireOwn && t.createdBy !== teacherUid) return false;
-    if (!requireOwn && t.createdBy) return false;
-    return true;
-  };
+  const personal = templates.find((t) => t.type === type && t.createdBy === teacherUid);
+  if (personal) return personal.text;
 
-  const priority = [
-    { requireSkill: true, requireOwn: true },
-    { requireSkill: false, requireOwn: true },
-    { requireSkill: true, requireOwn: false },
-    { requireSkill: false, requireOwn: false },
-  ];
-
-  for (const rule of priority) {
-    const found = templates.find((t) => matches(t, rule.requireSkill, rule.requireOwn));
-    if (found) return found.text;
-  }
+  const schoolDefault = templates.find((t) => t.type === type && !t.createdBy);
+  if (schoolDefault) return schoolDefault.text;
 
   return type === 'remedial' ? 'إحالة لجلسة معالجة فردية' : 'ترشيح لنشاط إثرائي إضافي';
 }
 
-// ---------------------------------------------------------------------------
-// 4) الفحص الكامل لأسبوع: يقارن بالأسبوع السابق لكل الطالبات ويقترح إجراءات
-// ---------------------------------------------------------------------------
+// الفحص ينشئ الإجراء "نشط" تلقائيا مباشرة — بدون خطوة موافقة يدوية
 export async function checkAndSuggestActionsForWeek(schoolId, { classId, teacherUid, week, students }) {
   const previousWeek = await getPreviousWeek(schoolId, classId, teacherUid, week.id);
   if (!previousWeek) return [];
@@ -141,8 +114,7 @@ export async function checkAndSuggestActionsForWeek(schoolId, { classId, teacher
       const skillsOfType = byType[type];
       if (skillsOfType.length === 0) continue;
 
-      const skillTitle = skillsOfType.length === 1 ? skillsOfType[0].skillTitle : null;
-      const suggestedText = await pickTemplateText(schoolId, { type, skillTitle, teacherUid });
+      const suggestedText = await pickTemplateText(schoolId, { type, teacherUid });
 
       const created = await upsertAction(schoolId, {
         classId,
@@ -160,16 +132,13 @@ export async function checkAndSuggestActionsForWeek(schoolId, { classId, teacher
   return results;
 }
 
-// ---------------------------------------------------------------------------
-// 5) عمليات Firestore: إنشاء/تحديث/تفعيل/تأجيل
-// ---------------------------------------------------------------------------
 async function upsertAction(schoolId, { classId, teacherUid, studentId, studentName, type, affectedSkillTitles, suggestedText, weekId }) {
   const actionsRef = collection(db, 'schools', schoolId, 'actions');
   const existingQ = query(
     actionsRef,
     where('studentId', '==', studentId),
     where('type', '==', type),
-    where('status', 'in', ['suggested', 'active']),
+    where('status', '==', 'active'),
   );
   const existingSnap = await getDocs(existingQ);
 
@@ -185,6 +154,9 @@ async function upsertAction(schoolId, { classId, teacherUid, studentId, studentN
     return { id: existingDoc.id, updated: true };
   }
 
+  const reviewDate = new Date();
+  reviewDate.setDate(reviewDate.getDate() + 14);
+
   const docRef = await addDoc(actionsRef, {
     classId,
     teacherUid,
@@ -194,12 +166,11 @@ async function upsertAction(schoolId, { classId, teacherUid, studentId, studentN
     affectedSkillTitles,
     suggestedText,
     finalText: suggestedText,
-    status: 'suggested',
-    deferCount: 0,
+    status: 'active',
     triggerWeekIds: [weekId],
-    activatedAt: null,
-    activatedBy: null,
-    reviewDate: null,
+    activatedAt: serverTimestamp(),
+    activatedBy: teacherUid,
+    reviewDate: Timestamp.fromDate(reviewDate),
     followUpLog: [],
     parentAcknowledgment: { viewedAt: null, viewedByParentId: null },
     createdAt: serverTimestamp(),
@@ -207,22 +178,9 @@ async function upsertAction(schoolId, { classId, teacherUid, studentId, studentN
   return { id: docRef.id, updated: false };
 }
 
-export async function activateAction(schoolId, { actionId, teacherUid, finalText, reviewDate }) {
+export async function updateActionText(schoolId, { actionId, finalText }) {
   const ref = doc(db, 'schools', schoolId, 'actions', actionId);
-  await updateDoc(ref, {
-    status: 'active',
-    finalText,
-    activatedAt: serverTimestamp(),
-    activatedBy: teacherUid,
-    reviewDate: reviewDate ? Timestamp.fromDate(new Date(reviewDate)) : null,
-  });
-}
-
-export async function deferAction(schoolId, { actionId }) {
-  const ref = doc(db, 'schools', schoolId, 'actions', actionId);
-  const snap = await getDoc(ref);
-  const currentDeferCount = snap.data()?.deferCount || 0;
-  await updateDoc(ref, { deferCount: currentDeferCount + 1 });
+  await updateDoc(ref, { finalText });
 }
 
 export async function listActionsForClass(schoolId, classId) {
@@ -233,16 +191,6 @@ export async function listActionsForClass(schoolId, classId) {
 
 export async function listActionsForStudent(schoolId, studentId) {
   const q = query(collection(db, 'schools', schoolId, 'actions'), where('studentId', '==', studentId));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-}
-
-export async function getPendingActions(schoolId, classId) {
-  const q = query(
-    collection(db, 'schools', schoolId, 'actions'),
-    where('classId', '==', classId),
-    where('status', '==', 'suggested'),
-  );
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
