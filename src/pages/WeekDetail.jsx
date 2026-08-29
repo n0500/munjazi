@@ -370,4 +370,6 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
           </table>
         </>
       )}
-    
+    </div>
+  );
+}
