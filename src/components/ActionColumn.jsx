@@ -1,12 +1,14 @@
-import { useState } from 'react';
-import { updateActionText } from '../lib/actionEngine';
+import { useEffect, useState } from 'react';
+import { updateActionText, listActionTemplatesForType, addActionTemplate } from '../lib/actionEngine';
 
 const TYPE_LABEL = {
   remedial: { icon: '⚠', text: 'علاجي' },
   enrichment: { icon: '⭐', text: 'إثرائي' },
 };
 
-export default function ActionColumn({ schoolId, studentName, actions, onChanged }) {
+const NEW_TEMPLATE_VALUE = '__new__';
+
+export default function ActionColumn({ schoolId, teacherUid, studentName, actions, onChanged }) {
   const [openAction, setOpenAction] = useState(null);
 
   if (!actions || actions.length === 0) {
@@ -45,6 +47,7 @@ export default function ActionColumn({ schoolId, studentName, actions, onChanged
       {openAction && (
         <ActionModal
           schoolId={schoolId}
+          teacherUid={teacherUid}
           studentName={studentName}
           action={openAction}
           onClose={() => setOpenAction(null)}
@@ -58,10 +61,32 @@ export default function ActionColumn({ schoolId, studentName, actions, onChanged
   );
 }
 
-function ActionModal({ schoolId, studentName, action, onClose, onChanged }) {
+function ActionModal({ schoolId, teacherUid, studentName, action, onClose, onChanged }) {
   const [text, setText] = useState(action.finalText || action.suggestedText);
+  const [templates, setTemplates] = useState([]);
   const [saving, setSaving] = useState(false);
   const label = TYPE_LABEL[action.type];
+
+  useEffect(() => {
+    listActionTemplatesForType(schoolId, action.type).then(setTemplates);
+  }, [schoolId, action.type]);
+
+  async function handleTemplateSelect(value) {
+    if (value === NEW_TEMPLATE_VALUE) {
+      const newText = window.prompt('اكتبي نص الإجراء الجديد:');
+      if (!newText || !newText.trim()) return;
+      try {
+        await addActionTemplate(schoolId, { type: action.type, text: newText, teacherUid });
+        setText(newText.trim());
+        const updated = await listActionTemplatesForType(schoolId, action.type);
+        setTemplates(updated);
+      } catch (err) {
+        window.alert(err.message || 'تعذّر إضافة النص.');
+      }
+      return;
+    }
+    setText(value);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -90,6 +115,28 @@ function ActionModal({ schoolId, studentName, action, onClose, onChanged }) {
         <p style={{ fontSize: 12, color: '#777', marginBottom: 16 }}>
           المهارات المتأثرة: {action.affectedSkillTitles.join('، ')}
         </p>
+
+        {templates.length > 0 && (
+          <select
+            value=""
+            onChange={(e) => handleTemplateSelect(e.target.value)}
+            style={{ width: '100%', padding: 6, fontSize: 12, marginBottom: 8 }}
+          >
+            <option value="">اختيار نص جاهز</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.text}>{t.text}</option>
+            ))}
+            <option value={NEW_TEMPLATE_VALUE}>+ إضافة نص جديد</option>
+          </select>
+        )}
+        {templates.length === 0 && (
+          <button
+            onClick={() => handleTemplateSelect(NEW_TEMPLATE_VALUE)}
+            style={{ fontSize: 12, color: '#0b7a4b', background: 'none', border: 'none', marginBottom: 8, padding: 0 }}
+          >
+            + إضافة أول نص لهذا النوع
+          </button>
+        )}
 
         <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>نص الإجراء</label>
         <textarea
