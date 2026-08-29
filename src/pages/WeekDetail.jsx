@@ -274,4 +274,100 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
       ) : (
         <>
           <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-            
+            <button onClick={handleAutoFillMastered} disabled={autoFilling} style={{ padding: '8px 14px', background: '#eaf6ee', border: '1px solid #0b7a4b', color: '#0b5c33', borderRadius: 8, fontSize: 13 }}>
+              {autoFilling ? '...' : 'توصيات تلقائية للمتقنات'}
+            </button>
+            <button onClick={handleCheckActions} disabled={checkingActions} style={{ padding: '8px 14px', background: '#fdf3e2', border: '1px solid #e0b25c', color: '#8a5a00', borderRadius: 8, fontSize: 13 }}>
+              {checkingActions ? '...' : 'فحص الإجراءات المتكررة'}
+            </button>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+            <thead>
+              <tr>
+                <th style={{ padding: 8, textAlign: 'right', borderBottom: '2px solid #ddd', position: 'sticky', right: 0, background: '#fff' }}>الطالبة</th>
+                {skills.map((s) => (
+                  <th key={s.id} style={{ padding: 8, borderBottom: '2px solid #ddd', minWidth: 130 }}>
+                    <div>{s.title}</div>
+                    <button onClick={() => handleSetAllMastered(s.id)} style={{ marginTop: 4, padding: '2px 8px', fontSize: 11, background: '#eaf6ee', border: '1px solid #0b7a4b', color: '#0b5c33', borderRadius: 6 }}>
+                      تعيين الكل: متقنة
+                    </button>
+                  </th>
+                ))}
+                <th style={{ padding: 8, borderBottom: '2px solid #ddd', minWidth: 200 }}>التوصية</th>
+                <th style={{ padding: 8, borderBottom: '2px solid #ddd', minWidth: 150 }}>الإجراء</th>
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((student) => {
+                const statuses = statusesForStudent(student.id);
+                const fullyMastered = isFullyMastered(student.id);
+                const relevantStatus = fullyMastered ? null : worstStatus(statuses);
+                const options = relevantStatus ? (recommendationsByStatus[relevantStatus] || []) : [];
+                return (
+                  <tr key={student.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: 8, position: 'sticky', right: 0, background: '#fff' }}>{student.name}</td>
+                    {skills.map((s) => {
+                      const current = assessmentsBySkill[s.id]?.[student.id]?.status || '';
+                      const colors = current ? STATUS_COLORS[current] : null;
+                      return (
+                        <td key={s.id} style={{ padding: 6, textAlign: 'center' }}>
+                          <select
+                            value={current}
+                            onChange={(e) => handleStatusChange(s.id, student.id, e.target.value)}
+                            style={{
+                              padding: 4,
+                              width: '100%',
+                              background: colors ? colors.bg : '#fff',
+                              color: colors ? colors.text : '#000',
+                              border: colors ? `1px solid ${colors.border}` : '1px solid #ccc',
+                              fontWeight: colors ? 'bold' : 'normal',
+                              borderRadius: 4,
+                            }}
+                          >
+                            <option value="">—</option>
+                            {Object.entries(STATUS_LABELS).map(([val, label]) => (
+                              <option key={val} value={val}>{STATUS_ICONS[val]} {label}</option>
+                            ))}
+                          </select>
+                        </td>
+                      );
+                    })}
+                    <td style={{ padding: 6 }}>
+                      {options.length > 0 && (
+                        <select
+                          value=""
+                          onChange={(e) => handleRecommendationSelect(student.id, relevantStatus, e.target.value)}
+                          style={{ padding: 4, width: '100%', marginBottom: 4, fontSize: 12 }}
+                        >
+                          <option value="">اختيار توصية جاهزة</option>
+                          {options.map((rec) => (
+                            <option key={rec.id} value={rec.text}>{rec.text}</option>
+                          ))}
+                          <option value={NEW_RECOMMENDATION_VALUE}>+ إضافة توصية جديدة</option>
+                        </select>
+                      )}
+                      <textarea
+                        value={weekRecommendations[student.id] || ''}
+                        onChange={(e) => handleRecommendationTextEdit(student.id, e.target.value)}
+                        onBlur={() => handleRecommendationTextSave(student.id)}
+                        placeholder="التوصية قابلة للتعديل"
+                        style={{ padding: 4, width: '100%', fontSize: 12, minHeight: 40 }}
+                      />
+                    </td>
+                    <td style={{ padding: 6 }}>
+                      <ActionColumn
+                        schoolId={schoolId}
+                        teacherUid={teacherUid}
+                        studentName={student.name}
+                        actions={actionsByStudent[student.id]}
+                        onChanged={refreshActions}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
+    
