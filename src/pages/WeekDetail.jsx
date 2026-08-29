@@ -10,6 +10,8 @@ import {
   autoFillEncouragementForMastered,
   worstStatus,
 } from '../lib/weekRecommendationsApi';
+import { checkAndSuggestActionsForWeek, listActionsForClass } from '../lib/actionEngine';
+import ActionColumn from '../components/ActionColumn';
 
 const TYPE_LABELS = { measurement: 'قياس', remediation: 'معالجة' };
 const NEW_RECOMMENDATION_VALUE = '__new__';
@@ -20,16 +22,29 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
   const [assessmentsBySkill, setAssessmentsBySkill] = useState({});
   const [weekRecommendations, setWeekRecommendations] = useState({});
   const [recommendationsByStatus, setRecommendationsByStatus] = useState({});
+  const [actionsByStudent, setActionsByStudent] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const [skillTitle, setSkillTitle] = useState('');
   const [addingSkill, setAddingSkill] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
+  const [checkingActions, setCheckingActions] = useState(false);
 
   const [editingLink, setEditingLink] = useState(false);
   const [linkDraft, setLinkDraft] = useState(week.enrichmentLink || '');
   const [savingLink, setSavingLink] = useState(false);
+
+  async function refreshActions() {
+    const allActions = await listActionsForClass(schoolId, classId);
+    const grouped = {};
+    allActions.forEach((a) => {
+      if (a.status !== 'suggested' && a.status !== 'active') return;
+      if (!grouped[a.studentId]) grouped[a.studentId] = [];
+      grouped[a.studentId].push(a);
+    });
+    setActionsByStudent(grouped);
+  }
 
   async function refresh() {
     setLoading(true);
@@ -59,6 +74,8 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
         }),
       );
       setRecommendationsByStatus(libMap);
+
+      await refreshActions();
     } catch (err) {
       setError(err.message || 'تعذّر تحميل بيانات الأسبوع الدراسي.');
     } finally {
@@ -70,6 +87,19 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [week.id]);
+
+  async function handleCheckActions() {
+    setError('');
+    setCheckingActions(true);
+    try {
+      await checkAndSuggestActionsForWeek(schoolId, { classId, teacherUid, week, students });
+      await refreshActions();
+    } catch (err) {
+      setError(err.message || 'تعذّر فحص الإجراءات.');
+    } finally {
+      setCheckingActions(false);
+    }
+  }
 
   async function handleAddSkill(e) {
     e.preventDefault();
@@ -243,10 +273,15 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
         <p style={{ color: '#666' }}>لا توجد مهارات بهذا الأسبوع الدراسي بعد.</p>
       ) : (
         <>
-          <button onClick={handleAutoFillMastered} disabled={autoFilling} style={{ marginBottom: 10, padding: '8px 14px', background: '#eaf6ee', border: '1px solid #0b7a4b', color: '#0b5c33', borderRadius: 8, fontSize: 13 }}>
-            {autoFilling ? '...' : 'توصيات تلقائية للمتقنات'}
-          </button>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <button onClick={handleAutoFillMastered} disabled={autoFilling} style={{ padding: '8px 14px', background: '#eaf6ee', border: '1px solid #0b7a4b', color: '#0b5c33', borderRadius: 8, fontSize: 13 }}>
+              {autoFilling ? '...' : 'توصيات تلقائية للمتقنات'}
+            </button>
+            <button onClick={handleCheckActions} disabled={checkingActions} style={{ padding: '8px 14px', background: '#fdf3e2', border: '1px solid #e0b25c', color: '#8a5a00', borderRadius: 8, fontSize: 13 }}>
+              {checkingActions ? '...' : 'فحص الإجراءات المتكررة'}
+            </button>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
             <thead>
               <tr>
                 <th style={{ padding: 8, textAlign: 'right', borderBottom: '2px solid #ddd', position: 'sticky', right: 0, background: '#fff' }}>الطالبة</th>
@@ -259,6 +294,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
                   </th>
                 ))}
                 <th style={{ padding: 8, borderBottom: '2px solid #ddd', minWidth: 200 }}>التوصية</th>
+                <th style={{ padding: 8, borderBottom: '2px solid #ddd', minWidth: 150 }}>الإجراء</th>
               </tr>
             </thead>
             <tbody>
@@ -316,6 +352,15 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
                         onBlur={() => handleRecommendationTextSave(student.id)}
                         placeholder="التوصية قابلة للتعديل"
                         style={{ padding: 4, width: '100%', fontSize: 12, minHeight: 40 }}
+                      />
+                    </td>
+                    <td style={{ padding: 6 }}>
+                      <ActionColumn
+                        schoolId={schoolId}
+                        teacherUid={teacherUid}
+                        studentName={student.name}
+                        actions={actionsByStudent[student.id]}
+                        onChanged={refreshActions}
                       />
                     </td>
                   </tr>
