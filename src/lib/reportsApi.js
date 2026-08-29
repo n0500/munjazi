@@ -32,10 +32,85 @@ async function activeActionsForStudent(schoolId, classId, studentId, teacherUid)
     }));
 }
 
-// يرجّع كل المواد (المعلمات) المرتبطة بفصل الطالبة — تُستخدم لصفحة ولي الأمر
 export async function listSubjectsForStudentClass(schoolId, classId) {
   const assignments = await listClassAssignments(schoolId, classId);
   return assignments.filter((a) => a.active !== false);
+}
+
+// يبني ملخّص كل مادة/معلمة لطالبة معيّنة — يُستخدم بلوحة ولي الأمر (نظرة عامة على كل المواد)
+export async function buildParentOverviewData(schoolId, { classId, className, studentId, studentName }) {
+  const assignments = await listSubjectsForStudentClass(schoolId, classId);
+  const allActions = await listActionsForClass(schoolId, classId);
+
+  const subjects = [];
+  for (const a of assignments) {
+    // eslint-disable-next-line no-await-in-loop
+    const weeks = await listWeeksForClass(schoolId, classId, a.teacherUid);
+    const latestWeek = weeks[0] || null;
+
+    let skillRows = [];
+    let masteredCount = 0;
+    let totalSkills = 0;
+    let enrichmentLink = '';
+    let weekName = '';
+
+    if (latestWeek) {
+      weekName = latestWeek.name;
+      enrichmentLink = latestWeek.enrichmentLink || '';
+      // eslint-disable-next-line no-await-in-loop
+      const skills = await listSkillsForWeek(schoolId, latestWeek.id);
+      totalSkills = skills.length;
+      // eslint-disable-next-line no-await-in-loop
+      for (const skill of skills) {
+        // eslint-disable-next-line no-await-in-loop
+        const assessments = await listAssessmentsForSkill(schoolId, skill.id);
+        const status = assessments[studentId]?.status || null;
+        if (status === 'mastered') masteredCount += 1;
+        skillRows.push({ title: skill.title, status, statusLabel: status ? STATUS_LABELS[status] : '—' });
+      }
+    }
+
+    const subjectActions = allActions
+      .filter((act) => act.studentId === studentId && act.teacherUid === a.teacherUid && act.status === 'active')
+      .map((act) => ({
+        id: act.id,
+        type: act.type,
+        typeLabel: act.type === 'remedial' ? 'علاجي' : 'إثرائي',
+        affectedSkillTitles: act.affectedSkillTitles || [],
+        text: act.finalText || act.suggestedText,
+      }));
+
+    const hasRemedial = subjectActions.some((x) => x.type === 'remedial');
+    const statusKey = !latestWeek ? 'notTracked' : hasRemedial ? 'needsAttention' : 'stable';
+
+    subjects.push({
+      teacherUid: a.teacherUid,
+      subject: a.subject || 'بدون اسم',
+      teacherName: a.teacherName,
+      weekName,
+      masteredCount,
+      totalSkills,
+      skillRows,
+      enrichmentLink,
+      activeActions: subjectActions,
+      statusKey,
+    });
+  }
+
+  const priority = subjects
+    .flatMap((s) => s.activeActions.filter((x) => x.type === 'remedial').map((x) => ({ ...x, subject: s.subject })))[0] || null;
+
+  return {
+    studentName,
+    className,
+    subjects,
+    priority,
+    counts: {
+      needsAttention: subjects.filter((s) => s.statusKey === 'needsAttention').length,
+      stable: subjects.filter((s) => s.statusKey === 'stable').length,
+      total: subjects.length,
+    },
+  };
 }
 
 export async function buildStudentReportData(schoolId, { classId, teacherUid, student, className, subject, teacherName, fromWeekId, toWeekId }) {
