@@ -14,6 +14,7 @@ import { db } from './firebase';
 import { listSkillsForWeek } from './skillsApi';
 import { listAssessmentsForSkill } from './assessmentsApi';
 import { listWeeksForClass } from './weeksApi';
+import { createPlan } from './remediationApi';
 
 const REMEDIAL_STATUSES = ['notMastered'];
 const ENRICHMENT_STATUSES = ['mastered'];
@@ -54,7 +55,7 @@ export function detectRepeatedSkillsForStudent({
     else if (ENRICHMENT_STATUSES.includes(currentStatus)) type = 'enrichment';
     if (!type) continue;
 
-    candidates.push({ skillTitle: skill.title, status: currentStatus, type });
+    candidates.push({ skillId: skill.id, skillTitle: skill.title, status: currentStatus, type });
   }
   return candidates;
 }
@@ -141,6 +142,8 @@ export async function checkAndSuggestActionsForWeek(schoolId, { classId, teacher
         affectedSkillTitles: skillsOfType.map((s) => s.skillTitle),
         suggestedText,
         weekId: week.id,
+        weekEnrichmentLink: week.enrichmentLink || '',
+        firstSkillStatus: skillsOfType[0].status,
       });
       results.push(created);
     }
@@ -148,7 +151,7 @@ export async function checkAndSuggestActionsForWeek(schoolId, { classId, teacher
   return results;
 }
 
-async function upsertAction(schoolId, { classId, teacherUid, studentId, studentName, type, affectedSkillTitles, suggestedText, weekId }) {
+async function upsertAction(schoolId, { classId, teacherUid, studentId, studentName, type, affectedSkillTitles, suggestedText, weekId, weekEnrichmentLink, firstSkillStatus }) {
   const actionsRef = collection(db, 'schools', schoolId, 'actions');
   const existingQ = query(
     actionsRef,
@@ -191,6 +194,27 @@ async function upsertAction(schoolId, { classId, teacherUid, studentId, studentN
     parentAcknowledgment: { viewedAt: null, viewedByParentId: null },
     createdAt: serverTimestamp(),
   });
+
+  // كل إجراء علاجي جديد يُنشئ تلقائيًا خطة علاجية رسمية بنفس النظام القديم
+  // (تظهر مباشرة بصفحة "الخطط العلاجية" ومستندها المطبوع الجاهز)
+  if (type === 'remedial') {
+    try {
+      await createPlan(schoolId, {
+        studentId,
+        studentName,
+        classId,
+        teacherUid,
+        skillTitle: affectedSkillTitles.join('، '),
+        weekId,
+        enrichmentLink: weekEnrichmentLink,
+        initialStatus: firstSkillStatus,
+      });
+    } catch (err) {
+      // لا نوقف تفعيل الإجراء لو فشل إنشاء الخطة الرسمية؛ الإجراء نفسه يبقى صالحًا
+      console.error('تعذّر إنشاء الخطة العلاجية المرتبطة:', err);
+    }
+  }
+
   return { id: docRef.id, updated: false };
 }
 
