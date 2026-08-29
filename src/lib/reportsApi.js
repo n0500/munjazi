@@ -6,7 +6,7 @@ import { listRecommendationsForWeek } from './weekRecommendationsApi';
 import { listClassStudents } from './studentsApi';
 import { listClassAssignments } from './classesApi';
 import { STATUS_LABELS } from './recommendationsApi';
-import { listActionsForClass } from './actionEngine';
+import { listActionsForClass, listActionsForStudent } from './actionEngine';
 
 const TYPE_LABELS = { measurement: 'قياس', remediation: 'معالجة' };
 
@@ -37,12 +37,12 @@ export async function listSubjectsForStudentClass(schoolId, classId) {
   return assignments.filter((a) => a.active !== false);
 }
 
-// يبني ملخّص كل مادة/معلمة لطالبة معينة — يُستخدم بلوحة ولي الأمر
-// يستخدم getStudentAssessment (قراءة مباشرة لوثيقة الطالبة) بدل القراءة الجماعية،
-// لأن ولي الأمر ما يملك صلاحية يقرأ تقييمات كل طالبات الفصل
+// يبني ملخّص كل مادة/معلمة لطالبة معيّنة — يُستخدم بلوحة ولي الأمر
+// يستخدم listActionsForStudent (فلترة بطالبة وحدة من الاستعلام نفسه) بدل
+// listActionsForClass، لأن ولي الأمر ما يملك صلاحية يقرأ إجراءات كل طالبات الفصل
 export async function buildParentOverviewData(schoolId, { classId, className, studentId, studentName }) {
   const assignments = await listSubjectsForStudentClass(schoolId, classId);
-  const allActions = await listActionsForClass(schoolId, classId);
+  const studentActions = await listActionsForStudent(schoolId, studentId);
 
   const subjects = [];
   for (const a of assignments) {
@@ -72,8 +72,8 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
       }
     }
 
-    const subjectActions = allActions
-      .filter((act) => act.studentId === studentId && act.teacherUid === a.teacherUid && act.status === 'active')
+    const subjectActions = studentActions
+      .filter((act) => act.teacherUid === a.teacherUid && act.status === 'active')
       .map((act) => ({
         id: act.id,
         type: act.type,
