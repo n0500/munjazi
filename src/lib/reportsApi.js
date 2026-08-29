@@ -4,6 +4,7 @@ import { listSkillsForWeek } from './skillsApi';
 import { listAssessmentsForSkill } from './assessmentsApi';
 import { listRecommendationsForWeek } from './weekRecommendationsApi';
 import { listClassStudents } from './studentsApi';
+import { listClassAssignments } from './classesApi';
 import { STATUS_LABELS } from './recommendationsApi';
 import { listActionsForClass } from './actionEngine';
 
@@ -17,17 +18,24 @@ function weeksInRange(allWeeksChronological, fromWeekId, toWeekId) {
   return allWeeksChronological.slice(start, end + 1);
 }
 
-// يرجّع فقط الإجراءات النشطة لطالبة معيّنة، بشكل مبسّط للعرض بالتقرير
-async function activeActionsForStudent(schoolId, classId, studentId) {
+async function activeActionsForStudent(schoolId, classId, studentId, teacherUid) {
   const allActions = await listActionsForClass(schoolId, classId);
   return allActions
-    .filter((a) => a.studentId === studentId && a.status === 'active')
+    .filter((a) => a.studentId === studentId && a.status === 'active' && a.teacherUid === teacherUid)
     .map((a) => ({
+      id: a.id,
       type: a.type,
       typeLabel: a.type === 'remedial' ? 'علاجي' : 'إثرائي',
       affectedSkillTitles: a.affectedSkillTitles || [],
       text: a.finalText || a.suggestedText,
+      parentAcknowledgment: a.parentAcknowledgment || { viewedAt: null, viewedByParentId: null },
     }));
+}
+
+// يرجّع كل المواد (المعلمات) المرتبطة بفصل الطالبة — تُستخدم لصفحة ولي الأمر
+export async function listSubjectsForStudentClass(schoolId, classId) {
+  const assignments = await listClassAssignments(schoolId, classId);
+  return assignments.filter((a) => a.active !== false);
 }
 
 export async function buildStudentReportData(schoolId, { classId, teacherUid, student, className, subject, teacherName, fromWeekId, toWeekId }) {
@@ -62,7 +70,7 @@ export async function buildStudentReportData(schoolId, { classId, teacherUid, st
     });
   }
 
-  const activeActions = await activeActionsForStudent(schoolId, classId, student.id);
+  const activeActions = await activeActionsForStudent(schoolId, classId, student.id, teacherUid);
 
   return {
     schoolName: school.name,
@@ -99,7 +107,7 @@ export async function buildClassWeekReportData(schoolId, { classId, teacherUid, 
       return { title: skill.title, status, statusLabel: status ? STATUS_LABELS[status] : '—' };
     });
     const studentActions = allActions
-      .filter((a) => a.studentId === student.id && a.status === 'active')
+      .filter((a) => a.studentId === student.id && a.status === 'active' && a.teacherUid === teacherUid)
       .map((a) => ({
         type: a.type,
         typeLabel: a.type === 'remedial' ? 'علاجي' : 'إثرائي',
@@ -168,7 +176,7 @@ export async function buildClassRangeReportData(schoolId, { classId, teacherUid,
   const studentActiveActions = {};
   students.forEach((student) => {
     studentActiveActions[student.name] = allActions
-      .filter((a) => a.studentId === student.id && a.status === 'active')
+      .filter((a) => a.studentId === student.id && a.status === 'active' && a.teacherUid === teacherUid)
       .map((a) => ({
         type: a.type,
         typeLabel: a.type === 'remedial' ? 'علاجي' : 'إثرائي',
