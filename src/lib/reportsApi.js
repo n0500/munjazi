@@ -1,7 +1,7 @@
 import { getSchool } from './schoolsApi';
 import { listWeeksForClass } from './weeksApi';
 import { listSkillsForWeek } from './skillsApi';
-import { listAssessmentsForSkill } from './assessmentsApi';
+import { listAssessmentsForSkill, getStudentAssessment } from './assessmentsApi';
 import { listRecommendationsForWeek } from './weekRecommendationsApi';
 import { listClassStudents } from './studentsApi';
 import { listClassAssignments } from './classesApi';
@@ -37,7 +37,9 @@ export async function listSubjectsForStudentClass(schoolId, classId) {
   return assignments.filter((a) => a.active !== false);
 }
 
-// يبني ملخّص كل مادة/معلمة لطالبة معيّنة — يُستخدم بلوحة ولي الأمر (نظرة عامة على كل المواد)
+// يبني ملخّص كل مادة/معلمة لطالبة معينة — يُستخدم بلوحة ولي الأمر
+// يستخدم getStudentAssessment (قراءة مباشرة لوثيقة الطالبة) بدل القراءة الجماعية،
+// لأن ولي الأمر ما يملك صلاحية يقرأ تقييمات كل طالبات الفصل
 export async function buildParentOverviewData(schoolId, { classId, className, studentId, studentName }) {
   const assignments = await listSubjectsForStudentClass(schoolId, classId);
   const allActions = await listActionsForClass(schoolId, classId);
@@ -63,8 +65,8 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
       // eslint-disable-next-line no-await-in-loop
       for (const skill of skills) {
         // eslint-disable-next-line no-await-in-loop
-        const assessments = await listAssessmentsForSkill(schoolId, skill.id);
-        const status = assessments[studentId]?.status || null;
+        const assessment = await getStudentAssessment(schoolId, skill.id, studentId);
+        const status = assessment?.status || null;
         if (status === 'mastered') masteredCount += 1;
         skillRows.push({ title: skill.title, status, statusLabel: status ? STATUS_LABELS[status] : '—' });
       }
