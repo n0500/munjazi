@@ -15,6 +15,34 @@ function StatusBadge({ status, statusLabel }) {
   );
 }
 
+function ActiveActionsSection({ activeActions }) {
+  if (!activeActions || activeActions.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 16 }}>
+      {activeActions.map((a, i) => {
+        const isRemedial = a.type === 'remedial';
+        const bg = isRemedial ? '#fdf3e2' : '#eaf6ee';
+        const border = isRemedial ? '#e0b25c' : '#0b7a4b';
+        const color = isRemedial ? '#8a5a00' : '#0b5c33';
+        return (
+          <div
+            key={i}
+            style={{
+              background: bg, border: `1px solid ${border}`, color, borderRadius: 8,
+              padding: '10px 12px', marginBottom: 8, fontSize: 13,
+            }}
+          >
+            <strong>{isRemedial ? '⚠ إجراء علاجي' : '⭐ إجراء إثرائي'}</strong>
+            {' — '}
+            {a.affectedSkillTitles.join('، ')}
+            <div style={{ marginTop: 4 }}>{a.text}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function StudentReport({ schoolId, classId, teacherUid, className, subject, teacherName, onBack }) {
   const [students, setStudents] = useState([]);
   const [weeks, setWeeks] = useState([]);
@@ -127,6 +155,8 @@ export default function StudentReport({ schoolId, classId, teacherUid, className
 
             <p><strong>الطالبة:</strong> {reportData.studentName}</p>
             <p><strong>الفصل:</strong> {reportData.className}</p>
+
+            <ActiveActionsSection activeActions={reportData.activeActions} />
 
             <div style={{ display: 'flex', gap: 10, margin: '14px 0', fontSize: 13 }}>
               <span>متقنة: {reportData.statusCounts.mastered}</span>
