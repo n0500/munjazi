@@ -195,8 +195,6 @@ async function upsertAction(schoolId, { classId, teacherUid, studentId, studentN
     createdAt: serverTimestamp(),
   });
 
-  // كل إجراء علاجي جديد يُنشئ تلقائيًا خطة علاجية رسمية بنفس النظام القديم
-  // (تظهر مباشرة بصفحة "الخطط العلاجية" ومستندها المطبوع الجاهز)
   if (type === 'remedial') {
     try {
       await createPlan(schoolId, {
@@ -210,8 +208,7 @@ async function upsertAction(schoolId, { classId, teacherUid, studentId, studentN
         initialStatus: firstSkillStatus,
       });
     } catch (err) {
-      // لا نوقف تفعيل الإجراء لو فشل إنشاء الخطة الرسمية؛ الإجراء نفسه يبقى صالحًا
-      console.error('تعذّر إنشاء الخطة العلاجية المرتبطة:', err);
+      throw new Error('تعذّر إنشاء الخطة العلاجية المرتبطة: ' + (err.message || err));
     }
   }
 
