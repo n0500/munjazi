@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import OwnerDashboard from './pages/OwnerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
+import ParentDashboard from './pages/ParentDashboard';
 
 function LogoutBar({ logout }) {
   return (
@@ -11,7 +12,7 @@ function LogoutBar({ logout }) {
         onClick={logout}
         style={{ padding: '8px 16px', background: '#a10000', color: '#fff', border: 'none', borderRadius: 8 }}
       >
-        تسجيل خروج
+        تسجيل الخروج
       </button>
     </div>
   );
@@ -20,7 +21,7 @@ function LogoutBar({ logout }) {
 function AppInner() {
   const { firebaseUser, profile, loading, logout } = useAuth();
 
-  if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جاري التحميل</p>;
+  if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
   if (!firebaseUser || !profile) {
     return <Login />;
@@ -53,20 +54,7 @@ function AppInner() {
     );
   }
 
-  return (
-    <div style={{ maxWidth: 420, margin: '60px auto', padding: 16, textAlign: 'center' }} dir="rtl">
-      <h1>منجزي ✅</h1>
-      <p>سجّلتِ الدخول بنجاح.</p>
-      <p><strong>نوع الحساب:</strong> ولي أمر</p>
-      <p><strong>الاسم:</strong> {profile.displayName}</p>
-      <button
-        onClick={logout}
-        style={{ marginTop: 20, padding: '10px 20px', background: '#a10000', color: '#fff', border: 'none', borderRadius: 8 }}
-      >
-        تسجيل خروج
-      </button>
-    </div>
-  );
+  return <ParentDashboard schoolId={profile.schoolId} profile={profile} logout={logout} />;
 }
 
 export default function App() {
