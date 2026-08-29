@@ -17,11 +17,14 @@ function StatusBadge({ status, statusLabel }) {
 function ActionsCell({ actions }) {
   if (!actions || actions.length === 0) return <span style={{ color: '#ccc' }}>—</span>;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {actions.map((a, i) => (
-        <span key={i} style={{ fontSize: 11, color: a.type === 'remedial' ? '#8a5a00' : '#0b5c33' }}>
-          {a.type === 'remedial' ? '⚠' : '⭐'} {a.affectedSkillTitles.join('، ')}
-        </span>
+        <div key={i} style={{ fontSize: 11 }}>
+          <span style={{ color: a.type === 'remedial' ? '#8a5a00' : '#0b5c33', fontWeight: 'bold' }}>
+            {a.type === 'remedial' ? '⚠' : '⭐'} {a.affectedSkillTitles.join('، ')}:
+          </span>
+          {' '}{a.text}
+        </div>
       ))}
     </div>
   );
@@ -224,64 +227,53 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
                   <div style={{ fontSize: 16, fontWeight: 'bold', marginTop: 6 }}>تقرير فصل — {rangeReport.className}</div>
                 </div>
 
-                {rangeReport.weeks.map((w) => (
-                  <div key={w.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 14, breakInside: 'avoid' }}>
-                    <h3 style={{ margin: '0 0 8px' }}>{w.name} — {w.typeLabel}</h3>
-                    {w.enrichmentLink && (
-                      <p style={{ fontSize: 12 }}>
-                        الرابط الإثرائي: <a href={w.enrichmentLink} target="_blank" rel="noreferrer">{w.enrichmentLink}</a>
-                      </p>
-                    )}
-                    {w.skillTitles.length === 0 ? (
-                      <p style={{ fontSize: 12, color: '#999' }}>لا توجد مهارات بهذا الأسبوع.</p>
-                    ) : (
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                        <thead>
-                          <tr>
-                            <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الطالبة</th>
-                            {w.skillTitles.map((t, i) => (
-                              <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>{t}</th>
-                            ))}
-                            <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>التوصية</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {w.rows.map((row, i) => (
-                            <tr key={i}>
-                              <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
-                              {row.cells.map((c, j) => (
-                                <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
+                {rangeReport.weeks.map((w, wIdx) => {
+                  const isLastWeek = wIdx === rangeReport.weeks.length - 1;
+                  return (
+                    <div key={w.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 14, breakInside: 'avoid' }}>
+                      <h3 style={{ margin: '0 0 8px' }}>{w.name} — {w.typeLabel}</h3>
+                      {w.enrichmentLink && (
+                        <p style={{ fontSize: 12 }}>
+                          الرابط الإثرائي: <a href={w.enrichmentLink} target="_blank" rel="noreferrer">{w.enrichmentLink}</a>
+                        </p>
+                      )}
+                      {w.skillTitles.length === 0 ? (
+                        <p style={{ fontSize: 12, color: '#999' }}>لا توجد مهارات بهذا الأسبوع.</p>
+                      ) : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead>
+                            <tr>
+                              <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الطالبة</th>
+                              {w.skillTitles.map((t, i) => (
+                                <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>{t}</th>
                               ))}
-                              <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.recommendation}</td>
+                              <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>التوصية</th>
+                              {isLastWeek && (
+                                <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الإجراء (الوضع الحالي)</th>
+                              )}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                ))}
-
-                <div style={{ marginBottom: 14 }}>
-                  <strong style={{ fontSize: 13 }}>الإجراءات النشطة حاليًا:</strong>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginTop: 6 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الطالبة</th>
-                        <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الإجراء</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(rangeReport.studentActiveActions || {})
-                        .filter(([, actions]) => actions.length > 0)
-                        .map(([name, actions], i) => (
-                          <tr key={i}>
-                            <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{name}</td>
-                            <td style={{ padding: 4, borderBottom: '1px solid #eee' }}><ActionsCell actions={actions} /></td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
+                          </thead>
+                          <tbody>
+                            {w.rows.map((row, i) => (
+                              <tr key={i}>
+                                <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
+                                {row.cells.map((c, j) => (
+                                  <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
+                                ))}
+                                <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.recommendation}</td>
+                                {isLastWeek && (
+                                  <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>
+                                    <ActionsCell actions={rangeReport.studentActiveActions?.[row.name]} />
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  );
+                })}
 
                 <div style={{ display: 'flex', gap: 10, margin: '14px 0', fontSize: 13 }}>
                   <strong>ملخص إحصائي إجمالي:</strong>
