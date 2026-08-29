@@ -14,6 +14,19 @@ function StatusBadge({ status, statusLabel }) {
   );
 }
 
+function ActionsCell({ actions }) {
+  if (!actions || actions.length === 0) return <span style={{ color: '#ccc' }}>—</span>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {actions.map((a, i) => (
+        <span key={i} style={{ fontSize: 11, color: a.type === 'remedial' ? '#8a5a00' : '#0b5c33' }}>
+          {a.type === 'remedial' ? '⚠' : '⭐'} {a.affectedSkillTitles.join('، ')}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 const STATUS_KEYS = [
   { key: 'mastered', label: 'متقنة' },
   { key: 'needsSupport', label: 'تحتاج دعم' },
@@ -179,6 +192,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
                         <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>{t}</th>
                       ))}
                       <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>التوصية</th>
+                      <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الإجراء</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -189,6 +203,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
                           <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
                         ))}
                         <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.recommendation}</td>
+                        <td style={{ padding: 4, borderBottom: '1px solid #eee' }}><ActionsCell actions={row.activeActions} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -245,6 +260,28 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
                     )}
                   </div>
                 ))}
+
+                <div style={{ marginBottom: 14 }}>
+                  <strong style={{ fontSize: 13 }}>الإجراءات النشطة حاليًا:</strong>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginTop: 6 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الطالبة</th>
+                        <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الإجراء</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(rangeReport.studentActiveActions || {})
+                        .filter(([, actions]) => actions.length > 0)
+                        .map(([name, actions], i) => (
+                          <tr key={i}>
+                            <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{name}</td>
+                            <td style={{ padding: 4, borderBottom: '1px solid #eee' }}><ActionsCell actions={actions} /></td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
 
                 <div style={{ display: 'flex', gap: 10, margin: '14px 0', fontSize: 13 }}>
                   <strong>ملخص إحصائي إجمالي:</strong>
