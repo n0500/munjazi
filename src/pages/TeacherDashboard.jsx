@@ -3,6 +3,7 @@ import { listClasses, linkTeacherToClass, listTeacherAssignments, removeAssignme
 import ClassWeeks from './ClassWeeks';
 import RecommendationsLibrary from './RecommendationsLibrary';
 import TeacherOverview from './TeacherOverview';
+import RemediationPlans from './RemediationPlans';
 
 export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) {
   const [allClasses, setAllClasses] = useState([]);
@@ -17,6 +18,7 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
   const [openClassId, setOpenClassId] = useState(null);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showOverview, setShowOverview] = useState(false);
+  const [showPlans, setShowPlans] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -76,6 +78,17 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
     return <TeacherOverview schoolId={schoolId} teacherUid={teacherUid} onBack={() => setShowOverview(false)} />;
   }
 
+  if (showPlans) {
+    return (
+      <RemediationPlans
+        schoolId={schoolId}
+        teacherUid={teacherUid}
+        teacherName={teacherName}
+        onBack={() => setShowPlans(false)}
+      />
+    );
+  }
+
   if (showLibrary) {
     return (
       <RecommendationsLibrary
@@ -105,9 +118,12 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
     <div style={{ maxWidth: 600, margin: '20px auto', padding: 16 }} dir="rtl">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <h1>لوحة المعلّمة</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={() => setShowOverview(true)} style={{ padding: '8px 14px', background: '#f2f2f2', border: 'none', borderRadius: 8, fontSize: 13 }}>
             نظرة عامة
+          </button>
+          <button onClick={() => setShowPlans(true)} style={{ padding: '8px 14px', background: '#f2f2f2', border: 'none', borderRadius: 8, fontSize: 13 }}>
+            الخطط العلاجية
           </button>
           <button onClick={() => setShowLibrary(true)} style={{ padding: '8px 14px', background: '#f2f2f2', border: 'none', borderRadius: 8, fontSize: 13 }}>
             مكتبة التوصيات
