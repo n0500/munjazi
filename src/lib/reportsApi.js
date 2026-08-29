@@ -5,16 +5,29 @@ import { listAssessmentsForSkill } from './assessmentsApi';
 import { listRecommendationsForWeek } from './weekRecommendationsApi';
 import { listClassStudents } from './studentsApi';
 import { STATUS_LABELS } from './recommendationsApi';
+import { listActionsForClass } from './actionEngine';
 
 const TYPE_LABELS = { measurement: 'قياس', remediation: 'معالجة' };
 
-// يرجّع الأسابيع بين أسبوعين مختارين (شاملة الطرفين)، مرتبة زمنيًا من الأقدم للأحدث
 function weeksInRange(allWeeksChronological, fromWeekId, toWeekId) {
   const fromIdx = allWeeksChronological.findIndex((w) => w.id === fromWeekId);
   const toIdx = allWeeksChronological.findIndex((w) => w.id === toWeekId);
   if (fromIdx === -1 || toIdx === -1) return [];
   const [start, end] = fromIdx <= toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
   return allWeeksChronological.slice(start, end + 1);
+}
+
+// يرجّع فقط الإجراءات النشطة لطالبة معيّنة، بشكل مبسّط للعرض بالتقرير
+async function activeActionsForStudent(schoolId, classId, studentId) {
+  const allActions = await listActionsForClass(schoolId, classId);
+  return allActions
+    .filter((a) => a.studentId === studentId && a.status === 'active')
+    .map((a) => ({
+      type: a.type,
+      typeLabel: a.type === 'remedial' ? 'علاجي' : 'إثرائي',
+      affectedSkillTitles: a.affectedSkillTitles || [],
+      text: a.finalText || a.suggestedText,
+    }));
 }
 
 export async function buildStudentReportData(schoolId, { classId, teacherUid, student, className, subject, teacherName, fromWeekId, toWeekId }) {
@@ -49,6 +62,8 @@ export async function buildStudentReportData(schoolId, { classId, teacherUid, st
     });
   }
 
+  const activeActions = await activeActionsForStudent(schoolId, classId, student.id);
+
   return {
     schoolName: school.name,
     principalName: school.principalName || '',
@@ -60,10 +75,10 @@ export async function buildStudentReportData(schoolId, { classId, teacherUid, st
     toWeekName: weeksData[weeksData.length - 1]?.name || '',
     weeks: weeksData,
     statusCounts,
+    activeActions,
   };
 }
 
-// تقرير الفصل — أسبوع محدد وحد: جدول كامل (طالبات × مهارات) + توصية كل طالبة + ملخص إحصائي للفصل
 export async function buildClassWeekReportData(schoolId, { classId, teacherUid, className, subject, teacherName, weekId, weekName, weekTypeLabel, enrichmentLink }) {
   const school = await getSchool(schoolId);
   const students = await listClassStudents(schoolId, classId);
@@ -74,6 +89,7 @@ export async function buildClassWeekReportData(schoolId, { classId, teacherUid, 
     assessmentsBySkill[skill.id] = await listAssessmentsForSkill(schoolId, skill.id);
   }
   const weekRecs = await listRecommendationsForWeek(schoolId, weekId);
+  const allActions = await listActionsForClass(schoolId, classId);
 
   const classCounts = { mastered: 0, needsSupport: 0, notMastered: 0, absent: 0 };
   const rows = students.map((student) => {
@@ -82,7 +98,15 @@ export async function buildClassWeekReportData(schoolId, { classId, teacherUid, 
       if (status && classCounts[status] !== undefined) classCounts[status] += 1;
       return { title: skill.title, status, statusLabel: status ? STATUS_LABELS[status] : '—' };
     });
-    return { name: student.name, cells, recommendation: weekRecs[student.id] || '' };
+    const studentActions = allActions
+      .filter((a) => a.studentId === student.id && a.status === 'active')
+      .map((a) => ({
+        type: a.type,
+        typeLabel: a.type === 'remedial' ? 'علاجي' : 'إثرائي',
+        affectedSkillTitles: a.affectedSkillTitles || [],
+        text: a.finalText || a.suggestedText,
+      }));
+    return { name: student.name, cells, recommendation: weekRecs[student.id] || '', activeActions: studentActions };
   });
 
   return {
@@ -100,13 +124,12 @@ export async function buildClassWeekReportData(schoolId, { classId, teacherUid, 
   };
 }
 
-// تقرير الفصل — مدى أسابيع: جدول كامل (طالبات × مهارات) لكل أسبوع بالمدى، عرض وحد بعد الثاني
-// عشان تسهل مقارنة نفس المهارة بين أسبوع قياس وأسبوع معالجة + ملخص إحصائي إجمالي بالنهاية
 export async function buildClassRangeReportData(schoolId, { classId, teacherUid, className, subject, teacherName, fromWeekId, toWeekId }) {
   const school = await getSchool(schoolId);
   const students = await listClassStudents(schoolId, classId);
   const allWeeks = (await listWeeksForClass(schoolId, classId, teacherUid)).slice().reverse();
   const rangeWeeks = weeksInRange(allWeeks, fromWeekId, toWeekId);
+  const allActions = await listActionsForClass(schoolId, classId);
 
   const classCounts = { mastered: 0, needsSupport: 0, notMastered: 0, absent: 0 };
   const weeksData = [];
@@ -142,6 +165,18 @@ export async function buildClassRangeReportData(schoolId, { classId, teacherUid,
     });
   }
 
+  const studentActiveActions = {};
+  students.forEach((student) => {
+    studentActiveActions[student.name] = allActions
+      .filter((a) => a.studentId === student.id && a.status === 'active')
+      .map((a) => ({
+        type: a.type,
+        typeLabel: a.type === 'remedial' ? 'علاجي' : 'إثرائي',
+        affectedSkillTitles: a.affectedSkillTitles || [],
+        text: a.finalText || a.suggestedText,
+      }));
+  });
+
   return {
     schoolName: school.name,
     principalName: school.principalName || '',
@@ -152,6 +187,7 @@ export async function buildClassRangeReportData(schoolId, { classId, teacherUid,
     toWeekName: weeksData[weeksData.length - 1]?.name || '',
     weeks: weeksData,
     classCounts,
+    studentActiveActions,
   };
 }
 
