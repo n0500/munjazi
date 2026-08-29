@@ -3,223 +3,255 @@ import {
   doc,
   getDoc,
   getDocs,
-  query,
-  where,
   addDoc,
   updateDoc,
+  query,
+  where,
   serverTimestamp,
   Timestamp,
-} from "firebase/firestore";
+} from 'firebase/firestore';
+import { db } from './firebase';
+import { listSkillsForWeek } from './skillsApi';
+import { listAssessmentsForSkill } from './assessmentsApi';
+import { listWeeksForClass } from './weeksApi';
 
-const REMEDIAL_STATUSES = ["غير متقنة"];
-const ENRICHMENT_STATUSES = ["متقنة"];
-const CONSECUTIVE_WEEKS_THRESHOLD = 2;
+// حالة "غير متقنة" تُفعّل إجراء علاجي، و"متقنة" تُفعّل إجراء إثرائي
+const REMEDIAL_STATUSES = ['notMastered'];
+const ENRICHMENT_STATUSES = ['mastered'];
 
-export function detectRepeatedSkills(currentSkills, previousSkills) {
-  if (!previousSkills) return [];
+// ---------------------------------------------------------------------------
+// 1) إيجاد الأسبوع السابق مباشرة لنفس الفصل والمعلمة
+// ---------------------------------------------------------------------------
+export async function getPreviousWeek(schoolId, classId, teacherUid, currentWeekId) {
+  const weeks = await listWeeksForClass(schoolId, classId, teacherUid);
+  // listWeeksForClass يرجعها الأحدث أولاً؛ نرتبها تصاعدياً لنجد اللي قبل الحالي مباشرة
+  const ascending = [...weeks].sort(
+    (a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0),
+  );
+  const idx = ascending.findIndex((w) => w.id === currentWeekId);
+  if (idx <= 0) return null;
+  return ascending[idx - 1];
+}
+
+// ---------------------------------------------------------------------------
+// 2) اكتشاف تكرار حالة نفس المهارة (بالاسم) بين أسبوعين، لطالبة واحدة
+// ---------------------------------------------------------------------------
+export function detectRepeatedSkillsForStudent({
+  studentId,
+  currentSkills,
+  currentAssessmentsBySkill,
+  previousSkills,
+  previousAssessmentsBySkill,
+}) {
+  const previousByTitle = {};
+  previousSkills.forEach((s) => {
+    previousByTitle[s.title.trim()] = s;
+  });
 
   const candidates = [];
+  for (const skill of currentSkills) {
+    const prevSkill = previousByTitle[skill.title.trim()];
+    if (!prevSkill) continue;
 
-  for (const [skillId, current] of Object.entries(currentSkills)) {
-    const previous = previousSkills[skillId];
-    if (!previous) continue;
-    if (current.status !== previous.status) continue;
+    const currentStatus = currentAssessmentsBySkill[skill.id]?.[studentId]?.status;
+    const previousStatus = previousAssessmentsBySkill[prevSkill.id]?.[studentId]?.status;
+    if (!currentStatus || currentStatus !== previousStatus) continue;
 
     let type = null;
-    if (REMEDIAL_STATUSES.includes(current.status)) type = "remedial";
-    else if (ENRICHMENT_STATUSES.includes(current.status)) type = "enrichment";
+    if (REMEDIAL_STATUSES.includes(currentStatus)) type = 'remedial';
+    else if (ENRICHMENT_STATUSES.includes(currentStatus)) type = 'enrichment';
     if (!type) continue;
 
-    candidates.push({
-      skillId,
-      skillName: current.name,
-      status: current.status,
-      type,
-    });
+    candidates.push({ skillTitle: skill.title, status: currentStatus, type });
   }
-
   return candidates;
 }
 
-export function pickTemplateText(templates, type, skillCategory, teacherId) {
+// ---------------------------------------------------------------------------
+// 3) اختيار نص القالب المقترح من مكتبة actionTemplates
+// ---------------------------------------------------------------------------
+export async function pickTemplateText(schoolId, { type, skillTitle, teacherUid }) {
+  const snap = await getDocs(collection(db, 'schools', schoolId, 'actionTemplates'));
+  const templates = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
   const matches = (t, requireSkill, requireOwn) => {
     if (t.type !== type) return false;
-    if (requireSkill && t.skillCategory !== skillCategory) return false;
-    if (!requireSkill && t.skillCategory !== null) return false;
-    if (requireOwn && t.createdBy !== teacherId) return false;
-    if (!requireOwn && t.createdBy !== null) return false;
+    if (requireSkill && t.skillTitle !== skillTitle) return false;
+    if (!requireSkill && t.skillTitle) return false;
+    if (requireOwn && t.createdBy !== teacherUid) return false;
+    if (!requireOwn && t.createdBy) return false;
     return true;
   };
 
-  const priorityOrder = [
+  const priority = [
     { requireSkill: true, requireOwn: true },
     { requireSkill: false, requireOwn: true },
     { requireSkill: true, requireOwn: false },
     { requireSkill: false, requireOwn: false },
   ];
 
-  for (const rule of priorityOrder) {
-    const found = templates.find((t) =>
-      matches(t, rule.requireSkill, rule.requireOwn)
-    );
+  for (const rule of priority) {
+    const found = templates.find((t) => matches(t, rule.requireSkill, rule.requireOwn));
     if (found) return found.text;
   }
 
-  return type === "remedial"
-    ? "إحالة لجلسة معالجة فردية"
-    : "ترشيح لنشاط إثرائي إضافي";
+  return type === 'remedial' ? 'إحالة لجلسة معالجة فردية' : 'ترشيح لنشاط إثرائي إضافي';
 }
 
-export function buildActionDraft(candidates, templates, teacherId) {
-  const byType = { remedial: [], enrichment: [] };
-  for (const c of candidates) byType[c.type].push(c);
+// ---------------------------------------------------------------------------
+// 4) الفحص الكامل لأسبوع: يقارن بالأسبوع السابق لكل الطالبات ويقترح إجراءات
+// ---------------------------------------------------------------------------
+export async function checkAndSuggestActionsForWeek(schoolId, { classId, teacherUid, week, students }) {
+  const previousWeek = await getPreviousWeek(schoolId, classId, teacherUid, week.id);
+  if (!previousWeek) return [];
 
-  const drafts = [];
-  for (const type of ["remedial", "enrichment"]) {
-    const skills = byType[type];
-    if (skills.length === 0) continue;
+  const [currentSkills, previousSkills] = await Promise.all([
+    listSkillsForWeek(schoolId, week.id),
+    listSkillsForWeek(schoolId, previousWeek.id),
+  ]);
 
-    const skillCategory = skills.length === 1 ? skills[0].skillId : null;
-    const text = pickTemplateText(templates, type, skillCategory, teacherId);
-
-    drafts.push({
-      type,
-      affectedSkills: skills.map((s) => ({
-        skillId: s.skillId,
-        skillName: s.skillName,
-      })),
-      suggestedText: text,
-    });
-  }
-
-  return drafts;
-}
-
-export async function checkAndSuggestActions(
-  db,
-  { schoolId, classId, studentId, studentName, weekId, currentSkills, previousSkills, teacherId }
-) {
-  const candidates = detectRepeatedSkills(currentSkills, previousSkills);
-  if (candidates.length === 0) return [];
-
-  const templatesSnap = await getDocs(
-    collection(db, "schools", schoolId, "actionTemplates")
+  const currentAssessmentsBySkill = {};
+  await Promise.all(
+    currentSkills.map(async (s) => {
+      currentAssessmentsBySkill[s.id] = await listAssessmentsForSkill(schoolId, s.id);
+    }),
   );
-  const templates = templatesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const previousAssessmentsBySkill = {};
+  await Promise.all(
+    previousSkills.map(async (s) => {
+      previousAssessmentsBySkill[s.id] = await listAssessmentsForSkill(schoolId, s.id);
+    }),
+  );
 
-  const drafts = buildActionDraft(candidates, templates, teacherId);
-  const actionsRef = collection(db, "schools", schoolId, "classes", classId, "actions");
-  const created = [];
-
-  for (const draft of drafts) {
-    const existingQ = query(
-      actionsRef,
-      where("studentId", "==", studentId),
-      where("type", "==", draft.type),
-      where("status", "in", ["suggested", "active"])
-    );
-    const existingSnap = await getDocs(existingQ);
-
-    if (!existingSnap.empty) {
-      const existingDoc = existingSnap.docs[0];
-      await updateDoc(existingDoc.ref, {
-        affectedSkills: draft.affectedSkills,
-        followUpLog: [
-          ...(existingDoc.data().followUpLog || []),
-          { weekId, note: "استمرار التكرار", date: Timestamp.now() },
-        ],
-      });
-      created.push({ id: existingDoc.id, updated: true });
-      continue;
-    }
-
-    const docRef = await addDoc(actionsRef, {
-      studentId,
-      studentName,
-      affectedSkills: draft.affectedSkills,
-      type: draft.type,
-      suggestedText: draft.suggestedText,
-      finalText: draft.suggestedText,
-      status: "suggested",
-      deferCount: 0,
-      triggerWeeks: [weekId],
-      activatedAt: null,
-      activatedBy: null,
-      reviewDate: null,
-      followUpLog: [],
-      parentAcknowledgment: { viewedAt: null, viewedByParentId: null },
-      createdAt: serverTimestamp(),
+  const results = [];
+  for (const student of students) {
+    const candidates = detectRepeatedSkillsForStudent({
+      studentId: student.id,
+      currentSkills,
+      currentAssessmentsBySkill,
+      previousSkills,
+      previousAssessmentsBySkill,
     });
-    created.push({ id: docRef.id, updated: false });
-  }
+    if (candidates.length === 0) continue;
 
-  return created;
+    const byType = { remedial: [], enrichment: [] };
+    candidates.forEach((c) => byType[c.type].push(c));
+
+    for (const type of ['remedial', 'enrichment']) {
+      const skillsOfType = byType[type];
+      if (skillsOfType.length === 0) continue;
+
+      const skillTitle = skillsOfType.length === 1 ? skillsOfType[0].skillTitle : null;
+      const suggestedText = await pickTemplateText(schoolId, { type, skillTitle, teacherUid });
+
+      const created = await upsertAction(schoolId, {
+        classId,
+        teacherUid,
+        studentId: student.id,
+        studentName: student.name,
+        type,
+        affectedSkillTitles: skillsOfType.map((s) => s.skillTitle),
+        suggestedText,
+        weekId: week.id,
+      });
+      results.push(created);
+    }
+  }
+  return results;
 }
 
-export async function activateAction(
-  db,
-  { schoolId, classId, actionId, teacherId, finalText, reviewDate }
-) {
-  const ref = doc(db, "schools", schoolId, "classes", classId, "actions", actionId);
+// ---------------------------------------------------------------------------
+// 5) عمليات Firestore: إنشاء/تحديث/تفعيل/تأجيل
+// ---------------------------------------------------------------------------
+async function upsertAction(schoolId, { classId, teacherUid, studentId, studentName, type, affectedSkillTitles, suggestedText, weekId }) {
+  const actionsRef = collection(db, 'schools', schoolId, 'actions');
+  const existingQ = query(
+    actionsRef,
+    where('studentId', '==', studentId),
+    where('type', '==', type),
+    where('status', 'in', ['suggested', 'active']),
+  );
+  const existingSnap = await getDocs(existingQ);
+
+  if (!existingSnap.empty) {
+    const existingDoc = existingSnap.docs[0];
+    await updateDoc(existingDoc.ref, {
+      affectedSkillTitles,
+      followUpLog: [
+        ...(existingDoc.data().followUpLog || []),
+        { weekId, note: 'استمرار التكرار', date: Timestamp.now() },
+      ],
+    });
+    return { id: existingDoc.id, updated: true };
+  }
+
+  const docRef = await addDoc(actionsRef, {
+    classId,
+    teacherUid,
+    studentId,
+    studentName,
+    type,
+    affectedSkillTitles,
+    suggestedText,
+    finalText: suggestedText,
+    status: 'suggested',
+    deferCount: 0,
+    triggerWeekIds: [weekId],
+    activatedAt: null,
+    activatedBy: null,
+    reviewDate: null,
+    followUpLog: [],
+    parentAcknowledgment: { viewedAt: null, viewedByParentId: null },
+    createdAt: serverTimestamp(),
+  });
+  return { id: docRef.id, updated: false };
+}
+
+export async function activateAction(schoolId, { actionId, teacherUid, finalText, reviewDate }) {
+  const ref = doc(db, 'schools', schoolId, 'actions', actionId);
   await updateDoc(ref, {
-    status: "active",
+    status: 'active',
     finalText,
     activatedAt: serverTimestamp(),
-    activatedBy: teacherId,
+    activatedBy: teacherUid,
     reviewDate: reviewDate ? Timestamp.fromDate(new Date(reviewDate)) : null,
   });
 }
 
-export async function deferAction(db, { schoolId, classId, actionId }) {
-  const ref = doc(db, "schools", schoolId, "classes", classId, "actions", actionId);
+export async function deferAction(schoolId, { actionId }) {
+  const ref = doc(db, 'schools', schoolId, 'actions', actionId);
   const snap = await getDoc(ref);
   const currentDeferCount = snap.data()?.deferCount || 0;
   await updateDoc(ref, { deferCount: currentDeferCount + 1 });
 }
 
-export async function logParentAcknowledgment(
-  db,
-  { schoolId, classId, actionId, parentId }
-) {
-  const ref = doc(db, "schools", schoolId, "classes", classId, "actions", actionId);
-  const snap = await getDoc(ref);
-  if (snap.data()?.parentAcknowledgment?.viewedAt) return;
-
-  await updateDoc(ref, {
-    parentAcknowledgment: {
-      viewedAt: serverTimestamp(),
-      viewedByParentId: parentId,
-    },
-  });
-}
-
-export async function logWeeklyReportView(
-  db,
-  { schoolId, classId, weekId, studentId, parentId }
-) {
-  const ref = doc(
-    db,
-    "schools",
-    schoolId,
-    "classes",
-    classId,
-    "weeklyRecords",
-    weekId,
-    "students",
-    studentId
-  );
-  const snap = await getDoc(ref);
-  if (snap.data()?.parentViewedAt) return;
-
-  await updateDoc(ref, {
-    parentViewedAt: serverTimestamp(),
-    parentViewedBy: parentId,
-  });
-}
-
-export async function getPendingActions(db, { schoolId, classId }) {
-  const actionsRef = collection(db, "schools", schoolId, "classes", classId, "actions");
-  const q = query(actionsRef, where("status", "==", "suggested"));
+export async function listActionsForClass(schoolId, classId) {
+  const q = query(collection(db, 'schools', schoolId, 'actions'), where('classId', '==', classId));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function listActionsForStudent(schoolId, studentId) {
+  const q = query(collection(db, 'schools', schoolId, 'actions'), where('studentId', '==', studentId));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function getPendingActions(schoolId, classId) {
+  const q = query(
+    collection(db, 'schools', schoolId, 'actions'),
+    where('classId', '==', classId),
+    where('status', '==', 'suggested'),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function logParentAcknowledgment(schoolId, { actionId, parentUid }) {
+  const ref = doc(db, 'schools', schoolId, 'actions', actionId);
+  const snap = await getDoc(ref);
+  if (snap.data()?.parentAcknowledgment?.viewedAt) return;
+  await updateDoc(ref, {
+    parentAcknowledgment: { viewedAt: serverTimestamp(), viewedByParentId: parentUid },
+  });
 }
