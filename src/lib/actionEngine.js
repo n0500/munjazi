@@ -232,6 +232,13 @@ export async function listActionsForStudent(schoolId, studentId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+// يجيب كل إجراءات المعلمة (عبر كل فصولها/مواد)، تُستخدم لتبويب "متابعة الاطلاع"
+export async function listActionsForTeacher(schoolId, teacherUid) {
+  const q = query(collection(db, 'schools', schoolId, 'actions'), where('teacherUid', '==', teacherUid));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 export async function logParentAcknowledgment(schoolId, { actionId, parentUid }) {
   const ref = doc(db, 'schools', schoolId, 'actions', actionId);
   const snap = await getDoc(ref);
