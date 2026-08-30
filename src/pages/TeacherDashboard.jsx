@@ -4,6 +4,7 @@ import ClassWeeks from './ClassWeeks';
 import RecommendationsLibrary from './RecommendationsLibrary';
 import TeacherOverview from './TeacherOverview';
 import RemediationPlans from './RemediationPlans';
+import AckTracking from './AckTracking';
 
 export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) {
   const [allClasses, setAllClasses] = useState([]);
@@ -19,6 +20,7 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
   const [showLibrary, setShowLibrary] = useState(false);
   const [showOverview, setShowOverview] = useState(false);
   const [showPlans, setShowPlans] = useState(false);
+  const [showAckTracking, setShowAckTracking] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -89,6 +91,16 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
     );
   }
 
+  if (showAckTracking) {
+    return (
+      <AckTracking
+        schoolId={schoolId}
+        teacherUid={teacherUid}
+        onBack={() => setShowAckTracking(false)}
+      />
+    );
+  }
+
   if (showLibrary) {
     return (
       <RecommendationsLibrary
@@ -124,6 +136,9 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
           </button>
           <button onClick={() => setShowPlans(true)} style={{ padding: '8px 14px', background: '#f2f2f2', border: 'none', borderRadius: 8, fontSize: 13 }}>
             الخطط العلاجية
+          </button>
+          <button onClick={() => setShowAckTracking(true)} style={{ padding: '8px 14px', background: '#f2f2f2', border: 'none', borderRadius: 8, fontSize: 13 }}>
+            متابعة الاطلاع
           </button>
           <button onClick={() => setShowLibrary(true)} style={{ padding: '8px 14px', background: '#f2f2f2', border: 'none', borderRadius: 8, fontSize: 13 }}>
             مكتبة التوصيات
