@@ -38,13 +38,17 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
     (async () => {
       setLoading(true);
       setError('');
+      let step = 'DIAG:قراءة بيانات الطالبة';
       try {
         const studentSnap = await getDoc(doc(db, 'schools', schoolId, 'students', profile.studentId));
         if (!studentSnap.exists()) throw new Error('لم يتم العثور على بيانات الطالبة.');
         const student = studentSnap.data();
         const classId = student.currentClassId;
+
+        step = 'DIAG:قراءة بيانات الفصل';
         const classInfo = await getClass(schoolId, classId);
 
+        step = 'DIAG:بناء نظرة عامة على المواد';
         const overview = await buildParentOverviewData(schoolId, {
           classId,
           className: classInfo.name,
@@ -53,6 +57,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
         });
         setData(overview);
 
+        step = 'DIAG:تسجيل الاطلاع';
         overview.subjects.forEach((s) => {
           s.activeActions
             .filter((a) => a.type === 'remedial')
@@ -61,7 +66,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
             });
         });
       } catch (err) {
-        setError(err.message || 'تعذّر تحميل بيانات المتابعة.');
+        setError(`${step} >>> ${err.message || err}`);
       } finally {
         setLoading(false);
       }
@@ -73,7 +78,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
   if (error) {
     return (
       <div style={{ maxWidth: 420, margin: '60px auto', padding: 16, textAlign: 'center' }} dir="rtl">
-        <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16 }}>{error}</div>
+        <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16, fontSize: 13, wordBreak: 'break-word' }}>{error}</div>
         <button onClick={logout} style={{ padding: '10px 20px', background: '#a10000', color: '#fff', border: 'none', borderRadius: 8 }}>
           تسجيل الخروج
         </button>
