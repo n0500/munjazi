@@ -254,4 +254,23 @@ export async function buildClassRangeReportData(schoolId, { classId, teacherUid,
       .map((a) => ({
         type: a.type,
         typeLabel: a.type === 'remedial' ? 'علاجي' : 'إثرائي',
-        affectedSkillTitles:
+        affectedSkillTitles: a.affectedSkillTitles || [],
+        text: a.finalText || a.suggestedText,
+      }));
+  });
+
+  return {
+    schoolName: school.name,
+    principalName: school.principalName || '',
+    teacherName,
+    className,
+    subject,
+    fromWeekName: weeksData[0]?.name || '',
+    toWeekName: weeksData[weeksData.length - 1]?.name || '',
+    weeks: weeksData,
+    classCounts,
+    studentActiveActions,
+  };
+}
+
+export { weeksInRange };
