@@ -37,17 +37,33 @@ export async function listSubjectsForStudentClass(schoolId, classId) {
   return assignments.filter((a) => a.active !== false);
 }
 
-// يبني ملخّص كل مادة/معلمة لطالبة معيّنة — يُستخدم بلوحة ولي الأمر
-// يستخدم listActionsForStudent (فلترة بطالبة وحدة من الاستعلام نفسه) بدل
-// listActionsForClass، لأن ولي الأمر ما يملك صلاحية يقرأ إجراءات كل طالبات الفصل
 export async function buildParentOverviewData(schoolId, { classId, className, studentId, studentName }) {
-  const assignments = await listSubjectsForStudentClass(schoolId, classId);
-  const studentActions = await listActionsForStudent(schoolId, studentId);
+  let dstep = 'DIAG2:جلب قائمة المواد (listClassAssignments)';
+  let assignments;
+  try {
+    assignments = await listSubjectsForStudentClass(schoolId, classId);
+  } catch (err) {
+    throw new Error(`${dstep} >>> ${err.message || err}`);
+  }
+
+  dstep = 'DIAG2:جلب إجراءات الطالبة (listActionsForStudent)';
+  let studentActions;
+  try {
+    studentActions = await listActionsForStudent(schoolId, studentId);
+  } catch (err) {
+    throw new Error(`${dstep} >>> ${err.message || err}`);
+  }
 
   const subjects = [];
   for (const a of assignments) {
-    // eslint-disable-next-line no-await-in-loop
-    const weeks = await listWeeksForClass(schoolId, classId, a.teacherUid);
+    dstep = `DIAG2:جلب أسابيع مادة "${a.subject}" (listWeeksForClass)`;
+    let weeks;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      weeks = await listWeeksForClass(schoolId, classId, a.teacherUid);
+    } catch (err) {
+      throw new Error(`${dstep} >>> ${err.message || err}`);
+    }
     const latestWeek = weeks[0] || null;
 
     let skillRows = [];
@@ -59,13 +75,26 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
     if (latestWeek) {
       weekName = latestWeek.name;
       enrichmentLink = latestWeek.enrichmentLink || '';
-      // eslint-disable-next-line no-await-in-loop
-      const skills = await listSkillsForWeek(schoolId, latestWeek.id);
-      totalSkills = skills.length;
-      // eslint-disable-next-line no-await-in-loop
-      for (const skill of skills) {
+
+      dstep = `DIAG2:جلب مهارات أسبوع "${weekName}" (listSkillsForWeek)`;
+      let skills;
+      try {
         // eslint-disable-next-line no-await-in-loop
-        const assessment = await getStudentAssessment(schoolId, skill.id, studentId);
+        skills = await listSkillsForWeek(schoolId, latestWeek.id);
+      } catch (err) {
+        throw new Error(`${dstep} >>> ${err.message || err}`);
+      }
+      totalSkills = skills.length;
+
+      for (const skill of skills) {
+        dstep = `DIAG2:جلب تقييم مهارة "${skill.title}" (getStudentAssessment)`;
+        let assessment;
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          assessment = await getStudentAssessment(schoolId, skill.id, studentId);
+        } catch (err) {
+          throw new Error(`${dstep} >>> ${err.message || err}`);
+        }
         const status = assessment?.status || null;
         if (status === 'mastered') masteredCount += 1;
         skillRows.push({ title: skill.title, status, statusLabel: status ? STATUS_LABELS[status] : '—' });
