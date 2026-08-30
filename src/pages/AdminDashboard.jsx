@@ -9,23 +9,18 @@ import {
   removeAssignment,
 } from '../lib/classesApi';
 import { listSchoolTeachers } from '../lib/teachersApi';
-import { listSchoolWeekNames, addSchoolWeekName, deleteSchoolWeekName } from '../lib/schoolWeekNamesApi';
 import ClassDetail from './ClassDetail';
 
 export default function AdminDashboard({ schoolId }) {
   const [school, setSchool] = useState(null);
   const [classes, setClasses] = useState([]);
   const [teachers, setTeachers] = useState([]);
-  const [weekNames, setWeekNames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
 
   const [className, setClassName] = useState('');
   const [creating, setCreating] = useState(false);
-
-  const [newWeekName, setNewWeekName] = useState('');
-  const [addingWeekName, setAddingWeekName] = useState(false);
 
   const [selectedClassId, setSelectedClassId] = useState(null);
   const [assignExpandedId, setAssignExpandedId] = useState(null);
@@ -38,16 +33,14 @@ export default function AdminDashboard({ schoolId }) {
     setLoading(true);
     setError('');
     try {
-      const [schoolRow, classRows, teacherRows, weekNameRows] = await Promise.all([
+      const [schoolRow, classRows, teacherRows] = await Promise.all([
         getSchool(schoolId),
         listClasses(schoolId),
         listSchoolTeachers(schoolId),
-        listSchoolWeekNames(schoolId),
       ]);
       setSchool(schoolRow);
       setClasses(classRows);
       setTeachers(teacherRows);
-      setWeekNames(weekNameRows);
     } catch (err) {
       setError(err.message || 'تعذّر تحميل بيانات المدرسة.');
     } finally {
@@ -73,34 +66,6 @@ export default function AdminDashboard({ schoolId }) {
       setError(err.message || 'تعذّر إنشاء الفصل.');
     } finally {
       setCreating(false);
-    }
-  }
-
-  async function handleAddWeekName(e) {
-    e.preventDefault();
-    setError('');
-    if (!newWeekName.trim() || addingWeekName) return;
-    setAddingWeekName(true);
-    try {
-      await addSchoolWeekName(schoolId, newWeekName);
-      setNewWeekName('');
-      const rows = await listSchoolWeekNames(schoolId);
-      setWeekNames(rows);
-    } catch (err) {
-      setError(err.message || 'تعذّر إضافة اسم الأسبوع.');
-    } finally {
-      setAddingWeekName(false);
-    }
-  }
-
-  async function handleDeleteWeekName(id) {
-    setError('');
-    try {
-      await deleteSchoolWeekName(schoolId, id);
-      const rows = await listSchoolWeekNames(schoolId);
-      setWeekNames(rows);
-    } catch (err) {
-      setError(err.message || 'تعذّر حذف اسم الأسبوع.');
     }
   }
 
@@ -196,31 +161,6 @@ export default function AdminDashboard({ schoolId }) {
       </div>
 
       {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16 }}>{error}</div>}
-
-      <div style={{ border: '1px solid #ddd', borderRadius: 10, padding: 16, marginBottom: 24 }}>
-        <h3 style={{ marginTop: 0 }}>أسماء الأسابيع الدراسية (موحّدة لكل المواد)</h3>
-        <p style={{ fontSize: 12, color: '#888', marginTop: 0 }}>
-          هذي القائمة تختار منها كل المعلّمات عند إنشاء أسبوع جديد، عشان تتوحّد الأسابيع بين كل المواد.
-        </p>
-        <form onSubmit={handleAddWeekName} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <input type="text" placeholder="مثال: الأسبوع السادس" value={newWeekName} onChange={(e) => setNewWeekName(e.target.value)} style={{ flex: 1, padding: 10 }} required />
-          <button type="submit" disabled={addingWeekName} style={{ padding: '10px 16px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8 }}>
-            {addingWeekName ? '...' : 'إضافة'}
-          </button>
-        </form>
-        {weekNames.length === 0 ? (
-          <p style={{ color: '#999', fontSize: 13 }}>لا توجد أسماء أسابيع بعد.</p>
-        ) : (
-          weekNames.map((w) => (
-            <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f2f2f2' }}>
-              <span style={{ fontSize: 14 }}>{w.name}</span>
-              <button onClick={() => handleDeleteWeekName(w.id)} style={{ padding: '2px 8px', background: '#a10000', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12 }}>
-                حذف
-              </button>
-            </div>
-          ))
-        )}
-      </div>
 
       <div style={{ border: '1px solid #ddd', borderRadius: 10, padding: 16, marginBottom: 24 }}>
         <h3 style={{ marginTop: 0 }}>إضافة فصل جديد</h3>
