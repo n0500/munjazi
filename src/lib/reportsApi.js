@@ -37,6 +37,19 @@ export async function listSubjectsForStudentClass(schoolId, classId) {
   return assignments.filter((a) => a.active !== false);
 }
 
+// يجيب مهارات أسبوع معيّن + حالة طالبة فيه — يُستخدم لفلتر الأسبوع بلوحة ولي الأمر
+export async function buildSubjectWeekSkills(schoolId, { weekId, classId, studentId }) {
+  const skills = await listSkillsForWeekAndClass(schoolId, weekId, classId);
+  const skillRows = [];
+  for (const skill of skills) {
+    // eslint-disable-next-line no-await-in-loop
+    const assessment = await getStudentAssessment(schoolId, skill.id, studentId);
+    const status = assessment?.status || null;
+    skillRows.push({ title: skill.title, status, statusLabel: status ? STATUS_LABELS[status] : '—' });
+  }
+  return skillRows;
+}
+
 export async function buildParentOverviewData(schoolId, { classId, className, studentId, studentName }) {
   const assignments = await listSubjectsForStudentClass(schoolId, classId);
   const studentActions = await listActionsForStudent(schoolId, studentId);
@@ -46,6 +59,7 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
     // eslint-disable-next-line no-await-in-loop
     const weeks = await listWeeksForClass(schoolId, classId, a.teacherUid);
     const latestWeek = weeks[0] || null;
+    const weekOptions = weeks.map((w) => ({ id: w.id, name: w.name }));
 
     let skillRows = [];
     let masteredCount = 0;
@@ -57,16 +71,9 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
       weekName = latestWeek.name;
       enrichmentLink = latestWeek.enrichmentLink || '';
       // eslint-disable-next-line no-await-in-loop
-      const skills = await listSkillsForWeekAndClass(schoolId, latestWeek.id, classId);
-      totalSkills = skills.length;
-      // eslint-disable-next-line no-await-in-loop
-      for (const skill of skills) {
-        // eslint-disable-next-line no-await-in-loop
-        const assessment = await getStudentAssessment(schoolId, skill.id, studentId);
-        const status = assessment?.status || null;
-        if (status === 'mastered') masteredCount += 1;
-        skillRows.push({ title: skill.title, status, statusLabel: status ? STATUS_LABELS[status] : '—' });
-      }
+      skillRows = await buildSubjectWeekSkills(schoolId, { weekId: latestWeek.id, classId, studentId });
+      totalSkills = skillRows.length;
+      masteredCount = skillRows.filter((s) => s.status === 'mastered').length;
     }
 
     const subjectActions = studentActions
@@ -84,9 +91,12 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
 
     subjects.push({
       teacherUid: a.teacherUid,
+      classId,
       subject: a.subject || 'بدون اسم',
       teacherName: a.teacherName,
       weekName,
+      latestWeekId: latestWeek?.id || null,
+      weekOptions,
       masteredCount,
       totalSkills,
       skillRows,
