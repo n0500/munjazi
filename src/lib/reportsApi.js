@@ -1,6 +1,6 @@
 import { getSchool } from './schoolsApi';
 import { listWeeksForClass } from './weeksApi';
-import { listSkillsForWeek } from './skillsApi';
+import { listSkillsForWeek, listSkillsForWeekAndClass } from './skillsApi';
 import { listAssessmentsForSkill, getStudentAssessment } from './assessmentsApi';
 import { listRecommendationsForWeek } from './weekRecommendationsApi';
 import { listClassStudents } from './studentsApi';
@@ -38,32 +38,13 @@ export async function listSubjectsForStudentClass(schoolId, classId) {
 }
 
 export async function buildParentOverviewData(schoolId, { classId, className, studentId, studentName }) {
-  let dstep = 'DIAG2:جلب قائمة المواد (listClassAssignments)';
-  let assignments;
-  try {
-    assignments = await listSubjectsForStudentClass(schoolId, classId);
-  } catch (err) {
-    throw new Error(`${dstep} >>> ${err.message || err}`);
-  }
-
-  dstep = 'DIAG2:جلب إجراءات الطالبة (listActionsForStudent)';
-  let studentActions;
-  try {
-    studentActions = await listActionsForStudent(schoolId, studentId);
-  } catch (err) {
-    throw new Error(`${dstep} >>> ${err.message || err}`);
-  }
+  const assignments = await listSubjectsForStudentClass(schoolId, classId);
+  const studentActions = await listActionsForStudent(schoolId, studentId);
 
   const subjects = [];
   for (const a of assignments) {
-    dstep = `DIAG2:جلب أسابيع مادة "${a.subject}" (listWeeksForClass)`;
-    let weeks;
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      weeks = await listWeeksForClass(schoolId, classId, a.teacherUid);
-    } catch (err) {
-      throw new Error(`${dstep} >>> ${err.message || err}`);
-    }
+    // eslint-disable-next-line no-await-in-loop
+    const weeks = await listWeeksForClass(schoolId, classId, a.teacherUid);
     const latestWeek = weeks[0] || null;
 
     let skillRows = [];
@@ -75,26 +56,13 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
     if (latestWeek) {
       weekName = latestWeek.name;
       enrichmentLink = latestWeek.enrichmentLink || '';
-
-      dstep = `DIAG2:جلب مهارات أسبوع "${weekName}" (listSkillsForWeek)`;
-      let skills;
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        skills = await listSkillsForWeek(schoolId, latestWeek.id);
-      } catch (err) {
-        throw new Error(`${dstep} >>> ${err.message || err}`);
-      }
+      // eslint-disable-next-line no-await-in-loop
+      const skills = await listSkillsForWeekAndClass(schoolId, latestWeek.id, classId);
       totalSkills = skills.length;
-
+      // eslint-disable-next-line no-await-in-loop
       for (const skill of skills) {
-        dstep = `DIAG2:جلب تقييم مهارة "${skill.title}" (getStudentAssessment)`;
-        let assessment;
-        try {
-          // eslint-disable-next-line no-await-in-loop
-          assessment = await getStudentAssessment(schoolId, skill.id, studentId);
-        } catch (err) {
-          throw new Error(`${dstep} >>> ${err.message || err}`);
-        }
+        // eslint-disable-next-line no-await-in-loop
+        const assessment = await getStudentAssessment(schoolId, skill.id, studentId);
         const status = assessment?.status || null;
         if (status === 'mastered') masteredCount += 1;
         skillRows.push({ title: skill.title, status, statusLabel: status ? STATUS_LABELS[status] : '—' });
@@ -286,23 +254,4 @@ export async function buildClassRangeReportData(schoolId, { classId, teacherUid,
       .map((a) => ({
         type: a.type,
         typeLabel: a.type === 'remedial' ? 'علاجي' : 'إثرائي',
-        affectedSkillTitles: a.affectedSkillTitles || [],
-        text: a.finalText || a.suggestedText,
-      }));
-  });
-
-  return {
-    schoolName: school.name,
-    principalName: school.principalName || '',
-    teacherName,
-    className,
-    subject,
-    fromWeekName: weeksData[0]?.name || '',
-    toWeekName: weeksData[weeksData.length - 1]?.name || '',
-    weeks: weeksData,
-    classCounts,
-    studentActiveActions,
-  };
-}
-
-export { weeksInRange };
+        affectedSkillTitles:
