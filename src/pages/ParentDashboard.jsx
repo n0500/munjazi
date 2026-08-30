@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getClass } from '../lib/classesApi';
-import { buildParentOverviewData } from '../lib/reportsApi';
+import { buildParentOverviewData, buildSubjectWeekSkills } from '../lib/reportsApi';
 import { logParentAcknowledgment } from '../lib/actionEngine';
 
 const STATUS_COLORS = {
@@ -11,6 +11,8 @@ const STATUS_COLORS = {
   notMastered: { bg: '#fdecea', text: '#a10000', border: '#c62828' },
   absent: { bg: '#f2f2f2', text: '#666', border: '#ccc' },
 };
+
+const ALL_WEEKS_VALUE = '__all__';
 
 function SkillBadge({ status, statusLabel }) {
   const colors = STATUS_COLORS[status] || { bg: '#f2f2f2', text: '#666', border: '#ccc' };
@@ -33,22 +35,21 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
   const [expandedSubject, setExpandedSubject] = useState(null);
+  const [selectedWeekBySubject, setSelectedWeekBySubject] = useState({});
+  const [skillsBySubjectWeek, setSkillsBySubjectWeek] = useState({});
+  const [loadingWeek, setLoadingWeek] = useState(null);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       setError('');
-      let step = 'DIAG:قراءة بيانات الطالبة';
       try {
         const studentSnap = await getDoc(doc(db, 'schools', schoolId, 'students', profile.studentId));
         if (!studentSnap.exists()) throw new Error('لم يتم العثور على بيانات الطالبة.');
         const student = studentSnap.data();
         const classId = student.currentClassId;
-
-        step = 'DIAG:قراءة بيانات الفصل';
         const classInfo = await getClass(schoolId, classId);
 
-        step = 'DIAG:بناء نظرة عامة على المواد';
         const overview = await buildParentOverviewData(schoolId, {
           classId,
           className: classInfo.name,
@@ -57,7 +58,6 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
         });
         setData(overview);
 
-        step = 'DIAG:تسجيل الاطلاع';
         overview.subjects.forEach((s) => {
           s.activeActions
             .filter((a) => a.type === 'remedial')
@@ -66,19 +66,46 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
             });
         });
       } catch (err) {
-        setError(`${step} >>> ${err.message || err}`);
+        setError(err.message || 'تعذّر تحميل بيانات المتابعة.');
       } finally {
         setLoading(false);
       }
     })();
   }, [schoolId, profile.studentId, profile.uid]);
 
+  async function handleWeekChange(subject, weekId) {
+    setSelectedWeekBySubject((prev) => ({ ...prev, [subject.teacherUid]: weekId }));
+
+    const cacheKey = `${subject.teacherUid}__${weekId}`;
+    if (skillsBySubjectWeek[cacheKey]) return;
+
+    setLoadingWeek(cacheKey);
+    try {
+      if (weekId === ALL_WEEKS_VALUE) {
+        const allWeeksData = [];
+        for (const w of subject.weekOptions) {
+          // eslint-disable-next-line no-await-in-loop
+          const rows = await buildSubjectWeekSkills(schoolId, { weekId: w.id, classId: subject.classId, studentId: profile.studentId });
+          allWeeksData.push({ weekName: w.name, skillRows: rows });
+        }
+        setSkillsBySubjectWeek((prev) => ({ ...prev, [cacheKey]: { type: 'all', weeks: allWeeksData } }));
+      } else {
+        const rows = await buildSubjectWeekSkills(schoolId, { weekId, classId: subject.classId, studentId: profile.studentId });
+        setSkillsBySubjectWeek((prev) => ({ ...prev, [cacheKey]: { type: 'single', skillRows: rows } }));
+      }
+    } catch (err) {
+      setError(err.message || 'تعذّر تحميل بيانات الأسبوع.');
+    } finally {
+      setLoadingWeek(null);
+    }
+  }
+
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
   if (error) {
     return (
       <div style={{ maxWidth: 420, margin: '60px auto', padding: 16, textAlign: 'center' }} dir="rtl">
-        <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16, fontSize: 13, wordBreak: 'break-word' }}>{error}</div>
+        <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16 }}>{error}</div>
         <button onClick={logout} style={{ padding: '10px 20px', background: '#a10000', color: '#fff', border: 'none', borderRadius: 8 }}>
           تسجيل الخروج
         </button>
@@ -160,6 +187,11 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
           const isExpanded = expandedSubject === s.teacherUid;
           const remedial = s.activeActions.find((a) => a.type === 'remedial');
           const enrichment = s.activeActions.find((a) => a.type === 'enrichment');
+          const selectedWeek = selectedWeekBySubject[s.teacherUid] || s.latestWeekId || '';
+          const cacheKey = `${s.teacherUid}__${selectedWeek}`;
+          const cached = skillsBySubjectWeek[cacheKey];
+          const isLoadingThisWeek = loadingWeek === cacheKey;
+
           return (
             <div key={s.teacherUid} style={{ border: '1px solid #eee', borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
               <button
@@ -179,7 +211,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
 
               {isExpanded && (
                 <div style={{ borderTop: '1px solid #eee', padding: '12px 14px' }}>
-                  <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>{s.teacherName} {s.weekName && `· ${s.weekName}`}</div>
+                  <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>{s.teacherName}</div>
 
                   {remedial && (
                     <div style={{ background: '#fdf3e2', border: '1px solid #e0b25c', color: '#8a5a00', borderRadius: 8, padding: '8px 10px', fontSize: 12, marginBottom: 8 }}>
@@ -194,9 +226,44 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                     </div>
                   )}
 
-                  {s.skillRows.length > 0 && (
+                  {s.weekOptions.length > 0 && (
+                    <select
+                      value={selectedWeek}
+                      onChange={(e) => handleWeekChange(s, e.target.value)}
+                      style={{ width: '100%', padding: 8, fontSize: 12, marginBottom: 10, borderRadius: 6, border: '1px solid #ddd' }}
+                    >
+                      {s.weekOptions.map((w) => (
+                        <option key={w.id} value={w.id}>{w.name}</option>
+                      ))}
+                      <option value={ALL_WEEKS_VALUE}>عرض كل الأسابيع</option>
+                    </select>
+                  )}
+
+                  {isLoadingThisWeek ? (
+                    <p style={{ fontSize: 12, color: '#999', textAlign: 'center', padding: 10 }}>...جارٍ التحميل</p>
+                  ) : cached?.type === 'all' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
+                      {cached.weeks.map((w, wi) => (
+                        <div key={wi} style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 8 }}>
+                          <div style={{ fontSize: 12, fontWeight: 'bold', color: '#666', marginBottom: 6 }}>{w.weekName}</div>
+                          {w.skillRows.length === 0 ? (
+                            <p style={{ fontSize: 11, color: '#bbb' }}>لا توجد مهارات مسجّلة.</p>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {w.skillRows.map((sk, i) => (
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+                                  <SkillBadge status={sk.status} statusLabel={sk.statusLabel} />
+                                  <span>{sk.title}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-                      {s.skillRows.map((sk, i) => (
+                      {(cached?.skillRows || s.skillRows).map((sk, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
                           <SkillBadge status={sk.status} statusLabel={sk.statusLabel} />
                           <span>{sk.title}</span>
