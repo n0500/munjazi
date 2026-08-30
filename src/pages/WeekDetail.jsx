@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { listSkillsForWeek, createSkill } from '../lib/skillsApi';
 import { listAssessmentsForSkill, setAssessment, setAllMasteredForSkill } from '../lib/assessmentsApi';
 import { listClassStudents } from '../lib/studentsApi';
@@ -15,6 +15,7 @@ import ActionColumn from '../components/ActionColumn';
 
 const TYPE_LABELS = { measurement: 'قياس', remediation: 'معالجة' };
 const NEW_RECOMMENDATION_VALUE = '__new__';
+const AUTO_CHECK_DELAY_MS = 2500;
 
 export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack }) {
   const [students, setStudents] = useState([]);
@@ -30,10 +31,13 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
   const [addingSkill, setAddingSkill] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
   const [checkingActions, setCheckingActions] = useState(false);
+  const [autoCheckNotice, setAutoCheckNotice] = useState(false);
 
   const [editingLink, setEditingLink] = useState(false);
   const [linkDraft, setLinkDraft] = useState(week.enrichmentLink || '');
   const [savingLink, setSavingLink] = useState(false);
+
+  const autoCheckTimer = useRef(null);
 
   async function refreshActions() {
     const allActions = await listActionsForClass(schoolId, classId);
@@ -88,6 +92,29 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [week.id]);
 
+  useEffect(() => {
+    return () => {
+      if (autoCheckTimer.current) clearTimeout(autoCheckTimer.current);
+    };
+  }, []);
+
+  // يجدول فحص تلقائي للإجراءات بعد أي تغيير بحالة مهارة، بتأخير بسيط
+  // عشان ما يتكرر الفحص مع كل ضغطة لو المعلمة تسجّل عدة طالبات بسرعة
+  function scheduleAutoCheck() {
+    if (autoCheckTimer.current) clearTimeout(autoCheckTimer.current);
+    autoCheckTimer.current = setTimeout(async () => {
+      try {
+        const currentStudents = await listClassStudents(schoolId, classId);
+        await checkAndSuggestActionsForWeek(schoolId, { classId, teacherUid, week, students: currentStudents });
+        await refreshActions();
+        setAutoCheckNotice(true);
+        setTimeout(() => setAutoCheckNotice(false), 3000);
+      } catch (err) {
+        setError(err.message || 'تعذّر فحص الإجراءات تلقائيًا.');
+      }
+    }, AUTO_CHECK_DELAY_MS);
+  }
+
   async function handleCheckActions() {
     setError('');
     setCheckingActions(true);
@@ -125,6 +152,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
         ...prev,
         [skillId]: { ...prev[skillId], [studentId]: { ...(prev[skillId]?.[studentId] || {}), status } },
       }));
+      scheduleAutoCheck();
     } catch (err) {
       setError(err.message || 'تعذّر حفظ التقييم.');
     }
@@ -136,6 +164,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
       const studentIds = students.map((s) => s.id);
       await setAllMasteredForSkill(schoolId, { skillId, weekId: week.id, classId, teacherUid, studentIds });
       await refresh();
+      scheduleAutoCheck();
     } catch (err) {
       setError(err.message || 'تعذّر التعيين الجماعي.');
     }
@@ -256,6 +285,11 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
       )}
 
       {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 12 }}>{error}</div>}
+      {autoCheckNotice && (
+        <div style={{ background: '#eaf6ee', color: '#0b5c33', padding: 10, borderRadius: 8, marginBottom: 12, fontSize: 13 }}>
+          ✓ تم فحص الإجراءات المتكررة تلقائيًا
+        </div>
+      )}
 
       <div style={{ border: '1px solid #ddd', borderRadius: 10, padding: 16, marginBottom: 16 }}>
         <h3 style={{ marginTop: 0 }}>إضافة مهارة جديدة</h3>
@@ -273,13 +307,14 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
         <p style={{ color: '#666' }}>لا توجد مهارات بهذا الأسبوع الدراسي بعد.</p>
       ) : (
         <>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
             <button onClick={handleAutoFillMastered} disabled={autoFilling} style={{ padding: '8px 14px', background: '#eaf6ee', border: '1px solid #0b7a4b', color: '#0b5c33', borderRadius: 8, fontSize: 13 }}>
               {autoFilling ? '...' : 'توصيات تلقائية للمتقنات'}
             </button>
             <button onClick={handleCheckActions} disabled={checkingActions} style={{ padding: '8px 14px', background: '#fdf3e2', border: '1px solid #e0b25c', color: '#8a5a00', borderRadius: 8, fontSize: 13 }}>
-              {checkingActions ? '...' : 'فحص الإجراءات المتكررة'}
+              {checkingActions ? '...' : 'فحص فوري الآن'}
             </button>
+            <span style={{ fontSize: 11, color: '#999' }}>الفحص يشتغل تلقائيًا بعد كل تحديث للتقييمات</span>
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
             <thead>
