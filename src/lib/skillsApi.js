@@ -21,6 +21,20 @@ export async function listSkillsForWeek(schoolId, weekId) {
   return rows;
 }
 
+// نسخة آمنة لولي الأمر: تضيف شرط classId عشان Firestore يقدر يتحقق من صلاحية القراءة
+// كاملة على مستوى الاستعلام نفسه (بدون هالشرط الإضافي يرفض الاستعلام بالكامل)
+export async function listSkillsForWeekAndClass(schoolId, weekId, classId) {
+  const q = query(
+    collection(db, 'schools', schoolId, 'skills'),
+    where('weekId', '==', weekId),
+    where('classId', '==', classId),
+  );
+  const snap = await getDocs(q);
+  const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  rows.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+  return rows;
+}
+
 export async function createSkill(schoolId, { weekId, classId, teacherUid, title }) {
   const trimmedTitle = (title || '').trim();
   if (!trimmedTitle) throw new Error('اسم المهارة مطلوب.');
