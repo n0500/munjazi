@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listWeeksForClass, createWeek, copyWeek } from '../lib/weeksApi';
+import { listSchoolWeekNames } from '../lib/schoolWeekNamesApi';
 import WeekDetail from './WeekDetail';
 import StudentReport from './StudentReport';
 import ClassReport from './ClassReport';
@@ -8,6 +9,7 @@ const TYPE_LABELS = { measurement: 'قياس', remediation: 'معالجة' };
 
 export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName, className, subject, onBack }) {
   const [weeks, setWeeks] = useState([]);
+  const [schoolWeekNames, setSchoolWeekNames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -29,8 +31,12 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
     setLoading(true);
     setError('');
     try {
-      const rows = await listWeeksForClass(schoolId, classId, teacherUid);
-      setWeeks(rows);
+      const [weekRows, nameRows] = await Promise.all([
+        listWeeksForClass(schoolId, classId, teacherUid),
+        listSchoolWeekNames(schoolId),
+      ]);
+      setWeeks(weekRows);
+      setSchoolWeekNames(nameRows);
     } catch (err) {
       setError(err.message || 'تعذّر تحميل الأسابيع الدراسية.');
     } finally {
@@ -139,23 +145,34 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
 
       <div style={{ border: '1px solid #ddd', borderRadius: 10, padding: 16, marginBottom: 16 }}>
         <h3 style={{ marginTop: 0 }}>إضافة أسبوع دراسي جديد</h3>
-        <form onSubmit={handleCreate}>
-          <label>اسم الأسبوع</label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }} required />
-          <label>النوع</label>
-          <select value={type} onChange={(e) => setType(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }}>
-            <option value="measurement">قياس</option>
-            <option value="remediation">معالجة</option>
-          </select>
-          <label>الرابط الإثرائي (اختياري)</label>
-          <input type="text" value={enrichmentLink} onChange={(e) => setEnrichmentLink(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }} />
-          <button type="submit" disabled={creating} style={{ padding: '10px 16px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8 }}>
-            {creating ? '...' : 'إضافة'}
-          </button>
-        </form>
+        {schoolWeekNames.length === 0 ? (
+          <p style={{ fontSize: 13, color: '#a10000' }}>
+            لا توجد أسماء أسابيع معتمدة من الإدارة بعد. تواصلي مع إدارة المدرسة لإضافتها.
+          </p>
+        ) : (
+          <form onSubmit={handleCreate}>
+            <label>اسم الأسبوع</label>
+            <select value={name} onChange={(e) => setName(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }} required>
+              <option value="">اختيار اسم الأسبوع</option>
+              {schoolWeekNames.map((w) => (
+                <option key={w.id} value={w.name}>{w.name}</option>
+              ))}
+            </select>
+            <label>النوع</label>
+            <select value={type} onChange={(e) => setType(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }}>
+              <option value="measurement">قياس</option>
+              <option value="remediation">معالجة</option>
+            </select>
+            <label>الرابط الإثرائي (اختياري)</label>
+            <input type="text" value={enrichmentLink} onChange={(e) => setEnrichmentLink(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }} />
+            <button type="submit" disabled={creating} style={{ padding: '10px 16px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8 }}>
+              {creating ? '...' : 'إضافة'}
+            </button>
+          </form>
+        )}
       </div>
 
-      {weeks.length > 0 && (
+      {weeks.length > 0 && schoolWeekNames.length > 0 && (
         <div style={{ border: '1px solid #ddd', borderRadius: 10, padding: 16, marginBottom: 16 }}>
           <h3 style={{ marginTop: 0 }}>نسخ من أسبوع سابق</h3>
           <form onSubmit={handleCopy}>
@@ -167,7 +184,12 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
               ))}
             </select>
             <label>اسم الأسبوع الجديد</label>
-            <input type="text" value={copyName} onChange={(e) => setCopyName(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }} required />
+            <select value={copyName} onChange={(e) => setCopyName(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }} required>
+              <option value="">اختيار اسم الأسبوع</option>
+              {schoolWeekNames.map((w) => (
+                <option key={w.id} value={w.name}>{w.name}</option>
+              ))}
+            </select>
             <label>النوع</label>
             <select value={copyType} onChange={(e) => setCopyType(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }}>
               <option value="measurement">قياس</option>
