@@ -215,6 +215,9 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
                   <span>مديرة المدرسة: {weekReport.principalName || '—'}</span>
                   <span>المعلّمة: {weekReport.teacherName}</span>
                 </div>
+                <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: '#999' }}>
+                  صادر من منجزي
+                </div>
               </>
             )}
 
@@ -285,6 +288,9 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 30, paddingTop: 16, borderTop: '1px solid #ccc', fontSize: 13 }}>
                   <span>مديرة المدرسة: {rangeReport.principalName || '—'}</span>
                   <span>المعلّمة: {rangeReport.teacherName}</span>
+                </div>
+                <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: '#999' }}>
+                  صادر من منجزي
                 </div>
               </>
             )}
