@@ -5,16 +5,28 @@ import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import ParentDashboard from './pages/ParentDashboard';
 import Footer from './components/Footer';
+import Logo from './components/Logo';
+import { colors } from './lib/theme';
 
-function LogoutBar({ logout }) {
+function TopBar({ logout }) {
   return (
-    <div style={{ textAlign: 'left', padding: 12 }} dir="rtl">
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '12px 16px',
+        borderBottom: `1px solid ${colors.border}`,
+      }}
+      dir="rtl"
+    >
       <button
         onClick={logout}
-        style={{ padding: '8px 16px', background: '#a10000', color: '#fff', border: 'none', borderRadius: 8 }}
+        style={{ padding: '8px 16px', background: colors.red, color: '#fff', border: 'none', borderRadius: 8 }}
       >
         تسجيل الخروج
       </button>
+      <Logo size="sm" />
     </div>
   );
 }
@@ -31,7 +43,7 @@ function AppInner() {
   if (profile.role === 'owner') {
     return (
       <div>
-        <LogoutBar logout={logout} />
+        <TopBar logout={logout} />
         <OwnerDashboard />
         <Footer />
       </div>
@@ -41,7 +53,7 @@ function AppInner() {
   if (profile.role === 'admin') {
     return (
       <div>
-        <LogoutBar logout={logout} />
+        <TopBar logout={logout} />
         <AdminDashboard schoolId={profile.schoolId} />
         <Footer />
       </div>
@@ -51,7 +63,7 @@ function AppInner() {
   if (profile.role === 'teacher') {
     return (
       <div>
-        <LogoutBar logout={logout} />
+        <TopBar logout={logout} />
         <TeacherDashboard schoolId={profile.schoolId} teacherUid={firebaseUser.uid} teacherName={profile.displayName} />
         <Footer />
       </div>
