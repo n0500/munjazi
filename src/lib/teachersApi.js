@@ -1,5 +1,5 @@
 import { createUserWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth';
-import { collection, doc, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDocs, query, where, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 
 export async function registerTeacher({ schoolCode, displayName, email, password }) {
@@ -41,4 +41,12 @@ export async function listSchoolTeachers(schoolId) {
   );
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+}
+
+// يُستخدم من لوحة الإدارة لتعطيل حساب معلّمة أو إعادة تفعيله
+export async function setTeacherDisabled(teacherUid, disabled) {
+  await updateDoc(doc(db, 'users', teacherUid), {
+    disabled,
+    updatedAt: serverTimestamp(),
+  });
 }
