@@ -3,12 +3,13 @@ import { listWeeksForClass } from '../lib/weeksApi';
 import { buildClassWeekReportData, buildClassRangeReportData } from '../lib/reportsApi';
 import { exportElementToPdf } from '../lib/pdfExport';
 import { STATUS_ICONS, STATUS_COLORS } from '../lib/recommendationsApi';
+import { colors, font, radius, spacing } from '../lib/theme';
 
 function StatusBadge({ status, statusLabel }) {
   if (!status) return <span>{statusLabel}</span>;
-  const colors = STATUS_COLORS[status];
+  const c = STATUS_COLORS[status];
   return (
-    <span style={{ background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '2px 6px', fontWeight: 'bold', fontSize: 12, whiteSpace: 'nowrap' }}>
+    <span style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: 6, padding: '2px 6px', fontWeight: 'bold', fontSize: 12, whiteSpace: 'nowrap' }}>
       {STATUS_ICONS[status]} {statusLabel}
     </span>
   );
@@ -117,17 +118,17 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
   return (
-    <div style={{ maxWidth: 600, margin: '20px auto', padding: 16 }} dir="rtl">
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#0b7a4b', marginBottom: 10 }}>
+    <div style={{ maxWidth: 600, margin: '20px auto', padding: spacing.lg }} dir="rtl">
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.primary, marginBottom: spacing.sm }}>
         ← العودة
       </button>
-      <h1>تقرير الفصل</h1>
+      <h1 style={{ fontFamily: font.family, color: colors.ink }}>تقرير الفصل</h1>
 
-      {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16 }}>{error}</div>}
+      {error && <div style={{ background: colors.redTint, color: colors.red, padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{error}</div>}
 
-      <form onSubmit={handleGenerate} style={{ border: '1px solid #ddd', borderRadius: 10, padding: 16 }}>
+      <form onSubmit={handleGenerate} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.lg }}>
         <label>نوع التقرير</label>
-        <select value={mode} onChange={(e) => setMode(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }}>
+        <select value={mode} onChange={(e) => setMode(e.target.value)} style={{ width: '100%', padding: spacing.sm, marginBottom: spacing.sm }}>
           <option value="single">أسبوع محدد</option>
           <option value="range">مدى أسابيع (ملخص إحصائي)</option>
         </select>
@@ -135,7 +136,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
         {mode === 'single' ? (
           <>
             <label>الأسبوع</label>
-            <select value={weekId} onChange={(e) => setWeekId(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }} required>
+            <select value={weekId} onChange={(e) => setWeekId(e.target.value)} style={{ width: '100%', padding: spacing.sm, marginBottom: spacing.sm }} required>
               <option value="">اختيار أسبوع</option>
               {weeks.map((w) => (
                 <option key={w.id} value={w.id}>{w.name}</option>
@@ -145,14 +146,14 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
         ) : (
           <>
             <label>من أسبوع</label>
-            <select value={fromWeekId} onChange={(e) => setFromWeekId(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }} required>
+            <select value={fromWeekId} onChange={(e) => setFromWeekId(e.target.value)} style={{ width: '100%', padding: spacing.sm, marginBottom: spacing.sm }} required>
               <option value="">اختيار أسبوع</option>
               {weeks.map((w) => (
                 <option key={w.id} value={w.id}>{w.name}</option>
               ))}
             </select>
             <label>إلى أسبوع</label>
-            <select value={toWeekId} onChange={(e) => setToWeekId(e.target.value)} style={{ width: '100%', padding: 10, marginBottom: 10 }} required>
+            <select value={toWeekId} onChange={(e) => setToWeekId(e.target.value)} style={{ width: '100%', padding: spacing.sm, marginBottom: spacing.sm }} required>
               <option value="">اختيار أسبوع</option>
               {weeks.map((w) => (
                 <option key={w.id} value={w.id}>{w.name}</option>
@@ -161,7 +162,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
           </>
         )}
 
-        <button type="submit" disabled={generating} style={{ padding: '10px 16px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8 }}>
+        <button type="submit" disabled={generating} style={{ padding: '10px 16px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button }}>
           {generating ? '...جارٍ التوليد' : 'توليد التقرير وتحميله'}
         </button>
       </form>
