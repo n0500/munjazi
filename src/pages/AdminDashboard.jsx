@@ -10,7 +10,11 @@ import {
 } from '../lib/classesApi';
 import { listSchoolTeachers, setTeacherDisabled } from '../lib/teachersApi';
 import { listClassStudents } from '../lib/studentsApi';
+import { listWeeksForClass } from '../lib/weeksApi';
+import { getLatestWeekSummary } from '../lib/overviewApi';
+import { listActionsForClass } from '../lib/actionEngine';
 import ClassDetail from './ClassDetail';
+import ClassReport from './ClassReport';
 import { colors, font, radius, spacing } from '../lib/theme';
 
 const TABS = [
@@ -19,6 +23,21 @@ const TABS = [
   { key: 'teachers', label: 'المعلمات' },
   { key: 'tracking', label: 'متابعة الرصد' },
 ];
+
+function daysSince(timestamp) {
+  if (!timestamp?.seconds) return null;
+  const ms = Date.now() - timestamp.seconds * 1000;
+  return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+}
+
+function formatDaysAgo(days) {
+  if (days === null) return '—';
+  if (days === 0) return 'اليوم';
+  if (days === 1) return 'منذ يوم واحد';
+  if (days === 2) return 'منذ يومين';
+  if (days <= 10) return `منذ ${days} أيام`;
+  return `منذ ${days} يومًا`;
+}
 
 export default function AdminDashboard({ schoolId }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -43,6 +62,10 @@ export default function AdminDashboard({ schoolId }) {
 
   const [togglingTeacherUid, setTogglingTeacherUid] = useState(null);
   const [confirmDisableUid, setConfirmDisableUid] = useState(null);
+
+  const [trackingRows, setTrackingRows] = useState(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [reportTarget, setReportTarget] = useState(null);
 
   async function refresh() {
     setLoading(true);
@@ -80,6 +103,72 @@ export default function AdminDashboard({ schoolId }) {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schoolId]);
+
+  async function loadTracking() {
+    setTrackingLoading(true);
+    setError('');
+    try {
+      const classNameFor = (classId) => classes.find((c) => c.id === classId)?.name || '؟';
+
+      const rows = await Promise.all(
+        assignments.map(async (a) => {
+          const [weeks, summary, classActions] = await Promise.all([
+            listWeeksForClass(schoolId, a.classId, a.teacherUid),
+            getLatestWeekSummary(schoolId, a.classId, a.teacherUid),
+            listActionsForClass(schoolId, a.classId),
+          ]);
+
+          const latestWeek = weeks[0] || null;
+          const daysAgo = latestWeek ? daysSince(latestWeek.createdAt) : null;
+
+          let masteryPercent = null;
+          if (summary) {
+            const total = Object.values(summary.counts).reduce((s, n) => s + n, 0);
+            if (total > 0) masteryPercent = Math.round((summary.counts.mastered / total) * 100);
+          }
+
+          const activeActionsCount = classActions.filter(
+            (act) => act.teacherUid === a.teacherUid && act.status === 'active',
+          ).length;
+
+          return {
+            assignmentId: a.id,
+            classId: a.classId,
+            className: classNameFor(a.classId),
+            teacherUid: a.teacherUid,
+            teacherName: a.teacherName,
+            subject: a.subject || 'بدون مادة',
+            weekName: summary?.weekName || null,
+            daysAgo,
+            masteryPercent,
+            activeActionsCount,
+          };
+        }),
+      );
+
+      rows.sort((a, b) => {
+        const aStale = a.daysAgo === null ? 9999 : a.daysAgo;
+        const bStale = b.daysAgo === null ? 9999 : b.daysAgo;
+        if (aStale !== bStale) return bStale - aStale;
+        const aMastery = a.masteryPercent === null ? -1 : a.masteryPercent;
+        const bMastery = b.masteryPercent === null ? -1 : b.masteryPercent;
+        return aMastery - bMastery;
+      });
+
+      setTrackingRows(rows);
+    } catch (err) {
+      setError(err.message || 'تعذّر تحميل بيانات المتابعة.');
+    } finally {
+      setTrackingLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'tracking' && trackingRows === null && !loading) {
+      loadTracking();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, loading]);
 
   async function handleCreateClass(e) {
     e.preventDefault();
@@ -136,6 +225,7 @@ export default function AdminDashboard({ schoolId }) {
       setAssignSubject('');
       const rows = await listClassAssignments(schoolId, classId);
       setAssignmentsByClass((prev) => ({ ...prev, [classId]: rows }));
+      setTrackingRows(null);
       await refresh();
     } catch (err) {
       setError(err.message || 'تعذّر إسناد المعلّمة.');
@@ -150,6 +240,7 @@ export default function AdminDashboard({ schoolId }) {
       await removeAssignment(schoolId, assignmentId);
       const rows = await listClassAssignments(schoolId, classId);
       setAssignmentsByClass((prev) => ({ ...prev, [classId]: rows }));
+      setTrackingRows(null);
       await refresh();
     } catch (err) {
       setError(err.message || 'تعذّر إزالة الإسناد.');
@@ -204,11 +295,28 @@ export default function AdminDashboard({ schoolId }) {
     );
   }
 
+  if (reportTarget) {
+    return (
+      <ClassReport
+        schoolId={schoolId}
+        classId={reportTarget.classId}
+        teacherUid={reportTarget.teacherUid}
+        className={reportTarget.className}
+        subject={reportTarget.subject}
+        teacherName={reportTarget.teacherName}
+        onBack={() => setReportTarget(null)}
+      />
+    );
+  }
+
   const activeClasses = classes.filter((c) => !c.archived);
   const archivedClasses = classes.filter((c) => c.archived);
   const activeTeachers = teachers.filter((t) => !t.disabled);
   const disabledTeachers = teachers.filter((t) => t.disabled);
   const totalStudents = Object.values(studentCounts).reduce((sum, n) => sum + n, 0);
+
+  const staleCount = trackingRows ? trackingRows.filter((r) => r.daysAgo === null || r.daysAgo > 7).length : 0;
+  const highActionsCount = trackingRows ? trackingRows.filter((r) => r.activeActionsCount > 0).length : 0;
 
   return (
     <div style={{ maxWidth: 700, margin: '20px auto', padding: spacing.lg }} dir="rtl">
@@ -389,7 +497,71 @@ export default function AdminDashboard({ schoolId }) {
       )}
 
       {activeTab === 'tracking' && (
-        <p style={{ color: colors.textMuted }}>سيُضاف قريبًا: متابعة حالة الرصد الأسبوعي لكل فصل، والمستوى العام، وروابط سريعة للتقارير.</p>
+        <>
+          {trackingLoading || trackingRows === null ? (
+            <p style={{ textAlign: 'center', color: colors.textMuted, marginTop: 30 }}>...جارٍ تحميل بيانات المتابعة</p>
+          ) : trackingRows.length === 0 ? (
+            <p style={{ color: colors.textMuted }}>لا توجد إسنادات معلّمات حاليًا لمتابعتها.</p>
+          ) : (
+            <>
+              <p style={{ fontSize: 14, color: colors.ink, marginBottom: spacing.lg }}>
+                {staleCount > 0 && `${staleCount} من ${trackingRows.length} فصلًا لم يُرصد خلال الأسبوع الماضي`}
+                {staleCount > 0 && highActionsCount > 0 && '، و'}
+                {highActionsCount > 0 && `${highActionsCount} فصلًا فيه إجراءات نشطة تحتاج متابعة`}
+                {staleCount === 0 && highActionsCount === 0 && 'جميع الفصول مرصودة بانتظام، ولا توجد إجراءات نشطة تستدعي الانتباه حاليًا'}
+              </p>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'right', borderBottom: `2px solid ${colors.border}`, padding: 8 }}>الفصل</th>
+                    <th style={{ textAlign: 'right', borderBottom: `2px solid ${colors.border}`, padding: 8 }}>المعلّمة</th>
+                    <th style={{ textAlign: 'right', borderBottom: `2px solid ${colors.border}`, padding: 8 }}>آخر رصد</th>
+                    <th style={{ textAlign: 'right', borderBottom: `2px solid ${colors.border}`, padding: 8 }}>المستوى العام</th>
+                    <th style={{ textAlign: 'right', borderBottom: `2px solid ${colors.border}`, padding: 8 }}>إجراءات نشطة</th>
+                    <th style={{ textAlign: 'right', borderBottom: `2px solid ${colors.border}`, padding: 8 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trackingRows.map((r) => {
+                    const isStale = r.daysAgo === null || r.daysAgo > 7;
+                    return (
+                      <tr key={r.assignmentId} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                        <td style={{ padding: 8 }}>{r.className}</td>
+                        <td style={{ padding: 8 }}>{r.teacherName} <span style={{ color: colors.textMuted }}>({r.subject})</span></td>
+                        <td style={{ padding: 8, color: isStale ? colors.red : colors.text }}>
+                          {r.weekName ? `${r.weekName} · ${formatDaysAgo(r.daysAgo)}` : 'لم يبدأ الرصد بعد'}
+                        </td>
+                        <td style={{ padding: 8 }}>
+                          {r.masteryPercent === null ? '—' : (
+                            <span style={{ color: r.masteryPercent >= 70 ? '#0b5c33' : r.masteryPercent >= 40 ? colors.amber : colors.red, fontWeight: 'bold' }}>
+                              {r.masteryPercent}٪ متقنة
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: 8 }}>
+                          {r.activeActionsCount > 0 ? (
+                            <span style={{ color: colors.amber }}>⚠ {r.activeActionsCount}</span>
+                          ) : (
+                            <span style={{ color: colors.textMuted }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: 8 }}>
+                          <button
+                            onClick={() => setReportTarget({ classId: r.classId, teacherUid: r.teacherUid, className: r.className, subject: r.subject, teacherName: r.teacherName })}
+                            style={{ padding: '4px 10px', background: '#f2f2f2', border: 'none', borderRadius: 6, fontSize: 12 }}
+                          >
+                            تقرير
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+        </>
       )}
     </div>
   );
