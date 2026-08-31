@@ -20,13 +20,13 @@ function TopBar({ logout }) {
       }}
       dir="rtl"
     >
+      <Logo size="sm" />
       <button
         onClick={logout}
         style={{ padding: '8px 16px', background: colors.red, color: '#fff', border: 'none', borderRadius: 8 }}
       >
         تسجيل الخروج
       </button>
-      <Logo size="sm" />
     </div>
   );
 }
