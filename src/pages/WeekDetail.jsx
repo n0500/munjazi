@@ -12,6 +12,7 @@ import {
 } from '../lib/weekRecommendationsApi';
 import { checkAndSuggestActionsForWeek, listActionsForClass } from '../lib/actionEngine';
 import ActionColumn from '../components/ActionColumn';
+import { colors, font, radius, spacing } from '../lib/theme';
 
 const TYPE_LABELS = { measurement: 'قياس', remediation: 'معالجة' };
 const NEW_RECOMMENDATION_VALUE = '__new__';
@@ -98,8 +99,6 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
     };
   }, []);
 
-  // يجدول فحص تلقائي للإجراءات بعد أي تغيير بحالة مهارة، بتأخير بسيط
-  // عشان ما يتكرر الفحص مع كل ضغطة لو المعلمة تسجّل عدة طالبات بسرعة
   function scheduleAutoCheck() {
     if (autoCheckTimer.current) clearTimeout(autoCheckTimer.current);
     autoCheckTimer.current = setTimeout(async () => {
@@ -251,85 +250,85 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
   return (
-    <div style={{ maxWidth: 950, margin: '20px auto', padding: 16, overflowX: 'auto' }} dir="rtl">
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#0b7a4b', marginBottom: 10 }}>
+    <div style={{ maxWidth: 950, margin: '20px auto', padding: spacing.lg, overflowX: 'auto' }} dir="rtl">
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.primary, marginBottom: spacing.sm }}>
         ← العودة إلى الأسابيع الدراسية
       </button>
-      <h1>{week.name} — {TYPE_LABELS[week.type]}</h1>
+      <h1 style={{ fontFamily: font.family, color: colors.ink }}>{week.name} — {TYPE_LABELS[week.type]}</h1>
       {week.enrichmentLink && !editingLink && (
         <p>
-          <a href={week.enrichmentLink} target="_blank" rel="noreferrer">الرابط الإثرائي لهذا الأسبوع</a>
+          <a href={week.enrichmentLink} target="_blank" rel="noreferrer" style={{ color: colors.primary }}>الرابط الإثرائي لهذا الأسبوع</a>
           {' '}
-          <button onClick={() => { setLinkDraft(week.enrichmentLink); setEditingLink(true); }} style={{ background: 'none', border: 'none', color: '#0b7a4b', fontSize: 12 }}>
+          <button onClick={() => { setLinkDraft(week.enrichmentLink); setEditingLink(true); }} style={{ background: 'none', border: 'none', color: colors.primary, fontSize: 12 }}>
             (تعديل)
           </button>
         </p>
       )}
       {!week.enrichmentLink && !editingLink && (
         <p>
-          <button onClick={() => { setLinkDraft(''); setEditingLink(true); }} style={{ background: 'none', border: 'none', color: '#0b7a4b', fontSize: 13 }}>
+          <button onClick={() => { setLinkDraft(''); setEditingLink(true); }} style={{ background: 'none', border: 'none', color: colors.primary, fontSize: 13 }}>
             + إضافة رابط إثرائي
           </button>
         </p>
       )}
       {editingLink && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <input type="text" value={linkDraft} onChange={(e) => setLinkDraft(e.target.value)} placeholder="رابط إثرائي" style={{ flex: 1, padding: 8 }} />
-          <button onClick={handleSaveLink} disabled={savingLink} style={{ padding: '8px 14px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8 }}>
+        <div style={{ display: 'flex', gap: spacing.sm, marginBottom: spacing.md }}>
+          <input type="text" value={linkDraft} onChange={(e) => setLinkDraft(e.target.value)} placeholder="رابط إثرائي" style={{ flex: 1, padding: spacing.sm }} />
+          <button onClick={handleSaveLink} disabled={savingLink} style={{ padding: '8px 14px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button }}>
             {savingLink ? '...' : 'حفظ'}
           </button>
-          <button onClick={() => setEditingLink(false)} style={{ padding: '8px 14px', background: '#f2f2f2', border: 'none', borderRadius: 8 }}>
+          <button onClick={() => setEditingLink(false)} style={{ padding: '8px 14px', background: '#f2f2f2', border: 'none', borderRadius: radius.button }}>
             إلغاء
           </button>
         </div>
       )}
 
-      {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 12 }}>{error}</div>}
+      {error && <div style={{ background: colors.redTint, color: colors.red, padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{error}</div>}
       {autoCheckNotice && (
-        <div style={{ background: '#eaf6ee', color: '#0b5c33', padding: 10, borderRadius: 8, marginBottom: 12, fontSize: 13 }}>
+        <div style={{ background: colors.primaryTint, color: '#0b5c33', padding: 10, borderRadius: radius.button, marginBottom: spacing.md, fontSize: 13 }}>
           ✓ تم فحص الإجراءات المتكررة تلقائيًا
         </div>
       )}
 
-      <div style={{ border: '1px solid #ddd', borderRadius: 10, padding: 16, marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0 }}>إضافة مهارة جديدة</h3>
-        <form onSubmit={handleAddSkill} style={{ display: 'flex', gap: 8 }}>
-          <input type="text" placeholder="اسم المهارة" value={skillTitle} onChange={(e) => setSkillTitle(e.target.value)} style={{ flex: 1, padding: 10 }} required />
-          <button type="submit" disabled={addingSkill} style={{ padding: '10px 16px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8 }}>
+      <div style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.lg }}>
+        <h3 style={{ marginTop: 0, fontFamily: font.family }}>إضافة مهارة جديدة</h3>
+        <form onSubmit={handleAddSkill} style={{ display: 'flex', gap: spacing.sm }}>
+          <input type="text" placeholder="اسم المهارة" value={skillTitle} onChange={(e) => setSkillTitle(e.target.value)} style={{ flex: 1, padding: spacing.sm }} required />
+          <button type="submit" disabled={addingSkill} style={{ padding: '10px 16px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button }}>
             {addingSkill ? '...' : 'إضافة'}
           </button>
         </form>
       </div>
 
       {students.length === 0 ? (
-        <p style={{ color: '#666' }}>لا توجد طالبات في هذا الفصل بعد.</p>
+        <p style={{ color: colors.textMuted }}>لا توجد طالبات في هذا الفصل بعد.</p>
       ) : skills.length === 0 ? (
-        <p style={{ color: '#666' }}>لا توجد مهارات بهذا الأسبوع الدراسي بعد.</p>
+        <p style={{ color: colors.textMuted }}>لا توجد مهارات بهذا الأسبوع الدراسي بعد.</p>
       ) : (
         <>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
-            <button onClick={handleAutoFillMastered} disabled={autoFilling} style={{ padding: '8px 14px', background: '#eaf6ee', border: '1px solid #0b7a4b', color: '#0b5c33', borderRadius: 8, fontSize: 13 }}>
+          <div style={{ display: 'flex', gap: spacing.sm, marginBottom: spacing.sm, alignItems: 'center' }}>
+            <button onClick={handleAutoFillMastered} disabled={autoFilling} style={{ padding: '8px 14px', background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: radius.button, fontSize: 13 }}>
               {autoFilling ? '...' : 'توصيات تلقائية للمتقنات'}
             </button>
-            <button onClick={handleCheckActions} disabled={checkingActions} style={{ padding: '8px 14px', background: '#fdf3e2', border: '1px solid #e0b25c', color: '#8a5a00', borderRadius: 8, fontSize: 13 }}>
+            <button onClick={handleCheckActions} disabled={checkingActions} style={{ padding: '8px 14px', background: colors.amberTint, border: `1px solid ${colors.amberBorder}`, color: colors.amber, borderRadius: radius.button, fontSize: 13 }}>
               {checkingActions ? '...' : 'فحص فوري الآن'}
             </button>
-            <span style={{ fontSize: 11, color: '#999' }}>الفحص يشتغل تلقائيًا بعد كل تحديث للتقييمات</span>
+            <span style={{ fontSize: 11, color: colors.textMuted }}>الفحص يشتغل تلقائيًا بعد كل تحديث للتقييمات</span>
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
             <thead>
               <tr>
-                <th style={{ padding: 8, textAlign: 'right', borderBottom: '2px solid #ddd', position: 'sticky', right: 0, background: '#fff' }}>الطالبة</th>
+                <th style={{ padding: spacing.sm, textAlign: 'right', borderBottom: `2px solid ${colors.border}`, position: 'sticky', right: 0, background: '#fff' }}>الطالبة</th>
                 {skills.map((s) => (
-                  <th key={s.id} style={{ padding: 8, borderBottom: '2px solid #ddd', minWidth: 130 }}>
+                  <th key={s.id} style={{ padding: spacing.sm, borderBottom: `2px solid ${colors.border}`, minWidth: 130 }}>
                     <div>{s.title}</div>
-                    <button onClick={() => handleSetAllMastered(s.id)} style={{ marginTop: 4, padding: '2px 8px', fontSize: 11, background: '#eaf6ee', border: '1px solid #0b7a4b', color: '#0b5c33', borderRadius: 6 }}>
+                    <button onClick={() => handleSetAllMastered(s.id)} style={{ marginTop: 4, padding: '2px 8px', fontSize: 11, background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: 6 }}>
                       تعيين الكل: متقنة
                     </button>
                   </th>
                 ))}
-                <th style={{ padding: 8, borderBottom: '2px solid #ddd', minWidth: 200 }}>التوصية</th>
-                <th style={{ padding: 8, borderBottom: '2px solid #ddd', minWidth: 150 }}>الإجراء</th>
+                <th style={{ padding: spacing.sm, borderBottom: `2px solid ${colors.border}`, minWidth: 200 }}>التوصية</th>
+                <th style={{ padding: spacing.sm, borderBottom: `2px solid ${colors.border}`, minWidth: 150 }}>الإجراء</th>
               </tr>
             </thead>
             <tbody>
@@ -339,11 +338,11 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
                 const relevantStatus = fullyMastered ? null : worstStatus(statuses);
                 const options = relevantStatus ? (recommendationsByStatus[relevantStatus] || []) : [];
                 return (
-                  <tr key={student.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: 8, position: 'sticky', right: 0, background: '#fff' }}>{student.name}</td>
+                  <tr key={student.id} style={{ borderBottom: `1px solid ${colors.border}` }}>
+                    <td style={{ padding: spacing.sm, position: 'sticky', right: 0, background: '#fff' }}>{student.name}</td>
                     {skills.map((s) => {
                       const current = assessmentsBySkill[s.id]?.[student.id]?.status || '';
-                      const colors = current ? STATUS_COLORS[current] : null;
+                      const statusColors = current ? STATUS_COLORS[current] : null;
                       return (
                         <td key={s.id} style={{ padding: 6, textAlign: 'center' }}>
                           <select
@@ -352,10 +351,10 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
                             style={{
                               padding: 4,
                               width: '100%',
-                              background: colors ? colors.bg : '#fff',
-                              color: colors ? colors.text : '#000',
-                              border: colors ? `1px solid ${colors.border}` : '1px solid #ccc',
-                              fontWeight: colors ? 'bold' : 'normal',
+                              background: statusColors ? statusColors.bg : '#fff',
+                              color: statusColors ? statusColors.text : '#000',
+                              border: statusColors ? `1px solid ${statusColors.border}` : '1px solid #ccc',
+                              fontWeight: statusColors ? 'bold' : 'normal',
                               borderRadius: 4,
                             }}
                           >
