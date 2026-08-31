@@ -197,6 +197,10 @@ export default function StudentReport({ schoolId, classId, teacherUid, className
               <span>مديرة المدرسة: {reportData.principalName || '—'}</span>
               <span>المعلّمة: {reportData.teacherName}</span>
             </div>
+
+            <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: '#999' }}>
+              صادر من منجزي
+            </div>
           </div>
         </div>
       )}
