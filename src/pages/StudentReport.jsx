@@ -43,6 +43,63 @@ function ActiveActionsSection({ activeActions }) {
   );
 }
 
+// نسبة الإتقان لكل أسبوع = (عدد المهارات المتقنة) / (عدد المهارات اللي لها حالة مسجّلة)
+function computeWeeklyMasteryPercent(weeks) {
+  return weeks.map((w) => {
+    const rated = w.skills.filter((s) => s.status);
+    const mastered = rated.filter((s) => s.status === 'mastered');
+    const percent = rated.length > 0 ? Math.round((mastered.length / rated.length) * 100) : null;
+    return { weekName: w.name, percent };
+  });
+}
+
+function ProgressLineChart({ weeks }) {
+  const points = computeWeeklyMasteryPercent(weeks).filter((p) => p.percent !== null);
+  if (points.length < 2) return null;
+
+  const width = 640;
+  const height = 140;
+  const paddingX = 30;
+  const paddingY = 20;
+  const chartW = width - paddingX * 2;
+  const chartH = height - paddingY * 2;
+
+  const stepX = chartW / (points.length - 1);
+  const coords = points.map((p, i) => ({
+    x: paddingX + i * stepX,
+    y: paddingY + chartH - (p.percent / 100) * chartH,
+    percent: p.percent,
+    weekName: p.weekName,
+  }));
+
+  const pathD = coords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>تطوّر الإتقان عبر الأسابيع</h3>
+      <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ maxWidth: 640 }}>
+        {[0, 25, 50, 75, 100].map((v) => {
+          const y = paddingY + chartH - (v / 100) * chartH;
+          return (
+            <g key={v}>
+              <line x1={paddingX} y1={y} x2={width - paddingX} y2={y} stroke="#eee" strokeWidth="1" />
+              <text x={paddingX - 6} y={y + 4} fontSize="9" fill="#999" textAnchor="end">{v}%</text>
+            </g>
+          );
+        })}
+        <path d={pathD} fill="none" stroke="#0b7a4b" strokeWidth="2" />
+        {coords.map((c, i) => (
+          <g key={i}>
+            <circle cx={c.x} cy={c.y} r="4" fill="#0b7a4b" />
+            <text x={c.x} y={c.y - 10} fontSize="10" fontWeight="bold" fill="#0b5c33" textAnchor="middle">{c.percent}%</text>
+            <text x={c.x} y={height - 4} fontSize="9" fill="#666" textAnchor="middle">{c.weekName}</text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 export default function StudentReport({ schoolId, classId, teacherUid, className, subject, teacherName, onBack }) {
   const [students, setStudents] = useState([]);
   const [weeks, setWeeks] = useState([]);
@@ -164,6 +221,8 @@ export default function StudentReport({ schoolId, classId, teacherUid, className
               <span>غير متقنة: {reportData.statusCounts.notMastered}</span>
               <span>غائبة: {reportData.statusCounts.absent}</span>
             </div>
+
+            <ProgressLineChart weeks={reportData.weeks} />
 
             {reportData.weeks.map((w) => (
               <div key={w.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 12 }}>
