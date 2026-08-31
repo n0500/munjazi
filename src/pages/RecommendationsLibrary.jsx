@@ -6,6 +6,7 @@ import {
   addCustomRecommendation,
   deleteCustomRecommendation,
 } from '../lib/recommendationsApi';
+import { colors, font, radius, spacing } from '../lib/theme';
 
 const EDITABLE_STATUSES = ['needsSupport', 'notMastered', 'absent'];
 
@@ -68,38 +69,38 @@ export default function RecommendationsLibrary({ schoolId, teacherUid, onBack })
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
   return (
-    <div style={{ maxWidth: 600, margin: '20px auto', padding: 16 }} dir="rtl">
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#0b7a4b', marginBottom: 10 }}>
+    <div style={{ maxWidth: 600, margin: '20px auto', padding: spacing.lg }} dir="rtl">
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.primary, marginBottom: spacing.sm }}>
         ← العودة إلى لوحة المعلّمة
       </button>
-      <h1>مكتبة التوصيات</h1>
+      <h1 style={{ fontFamily: font.family, color: colors.ink }}>مكتبة التوصيات</h1>
 
-      {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16 }}>{error}</div>}
+      {error && <div style={{ background: colors.redTint, color: colors.red, padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{error}</div>}
 
       {EDITABLE_STATUSES.map((status) => (
-        <div key={status} style={{ border: '1px solid #ddd', borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0 }}>{STATUS_LABELS[status]}</h3>
+        <div key={status} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.lg }}>
+          <h3 style={{ marginTop: 0, fontFamily: font.family }}>{STATUS_LABELS[status]}</h3>
 
-          <p style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>التوصيات الافتراضية:</p>
+          <p style={{ fontSize: 13, color: colors.textMuted, marginBottom: 6 }}>التوصيات الافتراضية:</p>
           {(DEFAULT_RECOMMENDATIONS[status] || []).map((text, i) => (
-            <div key={i} style={{ padding: '6px 0', borderBottom: '1px solid #f2f2f2', fontSize: 14, color: '#444' }}>{text}</div>
+            <div key={i} style={{ padding: '6px 0', borderBottom: '1px solid #f2f2f2', fontSize: 14, color: colors.text }}>{text}</div>
           ))}
 
-          <p style={{ fontSize: 13, color: '#666', marginTop: 12, marginBottom: 6 }}>توصياتي الخاصة:</p>
+          <p style={{ fontSize: 13, color: colors.textMuted, marginTop: 12, marginBottom: 6 }}>توصياتي الخاصة:</p>
           {(customByStatus[status] || []).length === 0 ? (
-            <p style={{ fontSize: 13, color: '#999' }}>لا توجد توصيات مضافة بعد.</p>
+            <p style={{ fontSize: 13, color: colors.textMuted }}>لا توجد توصيات مضافة بعد.</p>
           ) : (
             customByStatus[status].map((rec) => (
               <div key={rec.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f2f2f2' }}>
                 <span style={{ fontSize: 14 }}>{rec.text}</span>
-                <button onClick={() => handleDelete(rec.id)} style={{ padding: '2px 8px', background: '#a10000', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12 }}>
+                <button onClick={() => handleDelete(rec.id)} style={{ padding: '2px 8px', background: colors.red, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12 }}>
                   حذف
                 </button>
               </div>
             ))
           )}
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: spacing.sm }}>
             <input
               type="text"
               placeholder="إضافة توصية جديدة"
@@ -107,7 +108,7 @@ export default function RecommendationsLibrary({ schoolId, teacherUid, onBack })
               onChange={(e) => setNewText((prev) => ({ ...prev, [status]: e.target.value }))}
               style={{ flex: 1, padding: 8 }}
             />
-            <button onClick={() => handleAdd(status)} disabled={adding[status]} style={{ padding: '8px 14px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8 }}>
+            <button onClick={() => handleAdd(status)} disabled={adding[status]} style={{ padding: '8px 14px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button }}>
               {adding[status] ? '...' : 'إضافة'}
             </button>
           </div>
