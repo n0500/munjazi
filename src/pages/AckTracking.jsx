@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listActionsForTeacher } from '../lib/actionEngine';
 import { listClasses, listTeacherAssignments } from '../lib/classesApi';
+import { colors, font, radius, spacing } from '../lib/theme';
 
 const TYPE_LABEL = {
   remedial: { icon: '⚠', text: 'علاجي' },
@@ -75,20 +76,20 @@ export default function AckTracking({ schoolId, teacherUid, onBack }) {
   const pendingCount = actions.filter((a) => a.type === 'remedial' && !a.parentAcknowledgment?.viewedAt).length;
 
   return (
-    <div style={{ maxWidth: 700, margin: '20px auto', padding: 16 }} dir="rtl">
+    <div style={{ maxWidth: 700, margin: '20px auto', padding: spacing.lg }} dir="rtl">
       {onBack && (
-        <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#0b7a4b', marginBottom: 10 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.primary, marginBottom: spacing.sm }}>
           ← العودة إلى لوحة المعلّمة
         </button>
       )}
-      <h1>متابعة الاطلاع</h1>
-      <p style={{ color: '#666', fontSize: 13 }}>
+      <h1 style={{ fontFamily: font.family, color: colors.ink }}>متابعة الاطلاع</h1>
+      <p style={{ color: colors.textMuted, fontSize: 13 }}>
         هذا الجدول يوثّق اطّلاع أولياء الأمور على الإجراءات النشطة — يُسجَّل تلقائيًا عند فتح الصفحة، بدون حاجة لتأكيد يدوي منهم.
       </p>
 
-      {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16 }}>{error}</div>}
+      {error && <div style={{ background: colors.redTint, color: colors.red, padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{error}</div>}
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: spacing.lg }}>
         {[
           { key: 'all', label: `الكل (${actions.length})` },
           { key: 'remedial', label: 'علاجي فقط' },
@@ -98,8 +99,8 @@ export default function AckTracking({ schoolId, teacherUid, onBack }) {
             key={f.key}
             onClick={() => setFilter(f.key)}
             style={{
-              padding: '6px 14px', borderRadius: 20, fontSize: 12, border: filter === f.key ? 'none' : '1px solid #ddd',
-              background: filter === f.key ? '#0b7a4b' : '#fff', color: filter === f.key ? '#fff' : '#555',
+              padding: '6px 14px', borderRadius: radius.pill, fontSize: 12, border: filter === f.key ? 'none' : `1px solid ${colors.border}`,
+              background: filter === f.key ? colors.primary : '#fff', color: filter === f.key ? '#fff' : '#555',
             }}
           >
             {f.label}
@@ -108,16 +109,16 @@ export default function AckTracking({ schoolId, teacherUid, onBack }) {
       </div>
 
       {filteredActions.length === 0 ? (
-        <p style={{ color: '#999', textAlign: 'center', marginTop: 30 }}>لا توجد إجراءات تطابق هذا الفلتر.</p>
+        <p style={{ color: colors.textMuted, textAlign: 'center', marginTop: 30 }}>لا توجد إجراءات تطابق هذا الفلتر.</p>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'right', borderBottom: '2px solid #ddd', padding: 8 }}>الطالبة</th>
-              <th style={{ textAlign: 'right', borderBottom: '2px solid #ddd', padding: 8 }}>المادة</th>
-              <th style={{ textAlign: 'right', borderBottom: '2px solid #ddd', padding: 8 }}>الإجراء</th>
-              <th style={{ textAlign: 'right', borderBottom: '2px solid #ddd', padding: 8 }}>تاريخ التفعيل</th>
-              <th style={{ textAlign: 'right', borderBottom: '2px solid #ddd', padding: 8 }}>حالة الاطلاع</th>
+              <th style={{ textAlign: 'right', borderBottom: `2px solid ${colors.border}`, padding: 8 }}>الطالبة</th>
+              <th style={{ textAlign: 'right', borderBottom: `2px solid ${colors.border}`, padding: 8 }}>المادة</th>
+              <th style={{ textAlign: 'right', borderBottom: `2px solid ${colors.border}`, padding: 8 }}>الإجراء</th>
+              <th style={{ textAlign: 'right', borderBottom: `2px solid ${colors.border}`, padding: 8 }}>تاريخ التفعيل</th>
+              <th style={{ textAlign: 'right', borderBottom: `2px solid ${colors.border}`, padding: 8 }}>حالة الاطلاع</th>
             </tr>
           </thead>
           <tbody>
@@ -130,7 +131,7 @@ export default function AckTracking({ schoolId, teacherUid, onBack }) {
                   <td style={{ padding: 8 }}>{a.studentName}</td>
                   <td style={{ padding: 8 }}>{subjects[a.classId] || '—'} ({classNames[a.classId] || '؟'})</td>
                   <td style={{ padding: 8 }}>
-                    <span style={{ color: isRemedial ? '#8a5a00' : '#0b5c33' }}>
+                    <span style={{ color: isRemedial ? colors.amber : '#0b5c33' }}>
                       {label.icon} {a.affectedSkillTitles?.join('، ')}
                     </span>
                   </td>
@@ -141,7 +142,7 @@ export default function AckTracking({ schoolId, teacherUid, onBack }) {
                     ) : ackAt ? (
                       <span style={{ color: '#0b5c33' }}>✓ {ackAt}</span>
                     ) : (
-                      <span style={{ color: '#a10000' }}>⏳ لم يُطّلع بعد</span>
+                      <span style={{ color: colors.red }}>⏳ لم يُطّلع بعد</span>
                     )}
                   </td>
                 </tr>
