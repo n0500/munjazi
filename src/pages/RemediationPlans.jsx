@@ -10,9 +10,9 @@ import {
   suggestFollowUpText,
   FOLLOW_UP_PRESETS,
 } from '../lib/remediationApi';
-import { STATUS_LABELS, STATUS_ICONS, STATUS_COLORS } from '../lib/recommendationsApi';
 import { getSchool } from '../lib/schoolsApi';
 import { exportElementToPdf } from '../lib/pdfExport';
+import { colors, font, radius, spacing } from '../lib/theme';
 
 const STATUS_TEXT = { active: 'نشطة', closedSuccess: 'أُغلقت — نجحت', closedFailure: 'أُغلقت — لم تنجح' };
 
@@ -67,7 +67,7 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
       }
       setCandidates(allCandidates);
     } catch (err) {
-      setError(err.message || 'تعذّر تحميل الخطط العلاجية.');
+      setError(err.message || 'تعذر تحميل الخطط العلاجية.');
     } finally {
       setLoading(false);
     }
@@ -169,31 +169,31 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
   const closedPlans = plans.filter((p) => p.status !== 'active');
 
   return (
-    <div style={{ maxWidth: 700, margin: '20px auto', padding: 16 }} dir="rtl">
+    <div style={{ maxWidth: 700, margin: '20px auto', padding: spacing.lg }} dir="rtl">
       {onBack && (
-        <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#0b7a4b', marginBottom: 10 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.primary, marginBottom: spacing.sm }}>
           ← العودة إلى لوحة المعلّمة
         </button>
       )}
-      <h1>الخطط العلاجية</h1>
+      <h1 style={{ fontFamily: font.family, color: colors.ink }}>الخطط العلاجية</h1>
 
-      {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 16 }}>{error}</div>}
+      {error && <div style={{ background: colors.redTint, color: colors.red, padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{error}</div>}
 
       {candidates.length > 0 && (
-        <div style={{ border: '1px solid #d99a00', background: '#fff9ec', borderRadius: 10, padding: 16, marginBottom: 20 }}>
-          <h3 style={{ marginTop: 0 }}>مرشّحات لخطة علاجية ({candidates.length})</h3>
+        <div style={{ border: `1px solid ${colors.amberBorder}`, background: colors.amberTint, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.xl }}>
+          <h3 style={{ marginTop: 0, fontFamily: font.family }}>مرشّحات لخطة علاجية ({candidates.length})</h3>
           {candidates.map((c) => {
             const key = `${c.studentId}__${c.skillTitle}`;
             return (
-              <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', padding: '8px 0' }}>
+              <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${colors.border}`, padding: '8px 0' }}>
                 <div style={{ fontSize: 13 }}>
                   <strong>{c.studentName}</strong> — {c.skillTitle} ({classNameFor(c.classId)})
-                  <div style={{ color: '#8a5a00' }}>{c.lastStatusLabel} خلال آخر أسبوعين (حتى {c.weekName})</div>
+                  <div style={{ color: colors.amber }}>{c.lastStatusLabel} خلال آخر أسبوعين (حتى {c.weekName})</div>
                 </div>
                 <button
                   onClick={() => handleCreateFromCandidate(c)}
                   disabled={creatingPlanKey === key}
-                  style={{ padding: '6px 12px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, whiteSpace: 'nowrap' }}
+                  style={{ padding: '6px 12px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button, fontSize: 13, whiteSpace: 'nowrap' }}
                 >
                   {creatingPlanKey === key ? '...' : 'إنشاء خطة'}
                 </button>
@@ -203,32 +203,32 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
         </div>
       )}
 
-      <h3>الخطط النشطة ({activePlans.length})</h3>
+      <h3 style={{ fontFamily: font.family }}>الخطط النشطة ({activePlans.length})</h3>
       {activePlans.length === 0 ? (
-        <p style={{ color: '#666' }}>لا توجد خطط علاجية نشطة حاليًا.</p>
+        <p style={{ color: colors.textMuted }}>لا توجد خطط علاجية نشطة حاليًا.</p>
       ) : (
         activePlans.map((plan) => (
-          <div key={plan.id} style={{ border: '1px solid #ddd', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+          <div key={plan.id} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.md, marginBottom: spacing.md }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 6 }}>
               <div>
                 <strong>{plan.studentName}</strong> — {plan.skillTitle}
-                <div style={{ fontSize: 12, color: '#666' }}>
+                <div style={{ fontSize: 12, color: colors.textMuted }}>
                   {classNameFor(plan.classId)} · بدأت: {formatDate(plan.startDate?.toDate ? plan.startDate.toDate() : plan.startDate)} · مراجعة متوقّعة: {formatDate(plan.reviewDate)}
                 </div>
                 {plan.enrichmentLink && (
                   <div style={{ fontSize: 12 }}>
-                    <a href={plan.enrichmentLink} target="_blank" rel="noreferrer">الرابط الإثرائي</a>
+                    <a href={plan.enrichmentLink} target="_blank" rel="noreferrer" style={{ color: colors.primary }}>الرابط الإثرائي</a>
                   </div>
                 )}
                 {plan.action && <p style={{ fontSize: 13, marginTop: 4 }}><strong>الإجراء:</strong> {plan.action}</p>}
               </div>
-              <button onClick={() => handleExpandPlan(plan)} style={{ padding: '6px 10px', background: '#f2f2f2', border: 'none', borderRadius: 8, fontSize: 12 }}>
+              <button onClick={() => handleExpandPlan(plan)} style={{ padding: '6px 10px', background: '#f2f2f2', border: 'none', borderRadius: radius.button, fontSize: 12 }}>
                 {expandedPlanId === plan.id ? 'إخفاء المتابعة' : 'سجل المتابعة'}
               </button>
             </div>
 
             {expandedPlanId === plan.id && (
-              <div style={{ marginTop: 12, borderTop: '1px solid #eee', paddingTop: 10 }}>
+              <div style={{ marginTop: spacing.md, borderTop: `1px solid ${colors.border}`, paddingTop: spacing.sm }}>
                 <textarea
                   value={followUpDraft}
                   onChange={(e) => setFollowUpDraft(e.target.value)}
@@ -245,26 +245,26 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
                       <option key={i} value={preset}>{preset}</option>
                     ))}
                   </select>
-                  <button onClick={() => handleAddFollowUp(plan)} style={{ padding: '6px 14px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13 }}>
+                  <button onClick={() => handleAddFollowUp(plan)} style={{ padding: '6px 14px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button, fontSize: 13 }}>
                     إضافة متابعة
                   </button>
                 </div>
 
                 {(followUpsByPlan[plan.id] || []).map((f) => (
                   <div key={f.id} style={{ fontSize: 13, padding: '6px 0', borderBottom: '1px solid #f2f2f2' }}>
-                    <span style={{ color: '#999', fontSize: 11 }}>{formatDate(f.createdAt?.toDate ? f.createdAt.toDate() : f.createdAt)}</span>
+                    <span style={{ color: colors.textMuted, fontSize: 11 }}>{formatDate(f.createdAt?.toDate ? f.createdAt.toDate() : f.createdAt)}</span>
                     <div>{f.text}</div>
                   </div>
                 ))}
 
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <button onClick={() => handleClose(plan, 'success')} style={{ padding: '6px 12px', background: '#eaf6ee', color: '#0b5c33', border: '1px solid #0b7a4b', borderRadius: 8, fontSize: 12 }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: spacing.sm }}>
+                  <button onClick={() => handleClose(plan, 'success')} style={{ padding: '6px 12px', background: colors.primaryTint, color: '#0b5c33', border: `1px solid ${colors.primary}`, borderRadius: radius.button, fontSize: 12 }}>
                     أُغلقت — نجحت
                   </button>
-                  <button onClick={() => handleClose(plan, 'failure')} style={{ padding: '6px 12px', background: '#fdecea', color: '#a10000', border: '1px solid #c62828', borderRadius: 8, fontSize: 12 }}>
+                  <button onClick={() => handleClose(plan, 'failure')} style={{ padding: '6px 12px', background: colors.redTint, color: colors.red, border: `1px solid ${colors.redBorder}`, borderRadius: radius.button, fontSize: 12 }}>
                     أُغلقت — لم تنجح
                   </button>
-                  <button onClick={() => handleExportPdf(plan)} style={{ padding: '6px 12px', background: '#f2f2f2', border: 'none', borderRadius: 8, fontSize: 12 }}>
+                  <button onClick={() => handleExportPdf(plan)} style={{ padding: '6px 12px', background: '#f2f2f2', border: 'none', borderRadius: radius.button, fontSize: 12 }}>
                     تحميل PDF
                   </button>
                 </div>
@@ -276,9 +276,9 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
 
       {closedPlans.length > 0 && (
         <>
-          <h3>الخطط المغلقة ({closedPlans.length})</h3>
+          <h3 style={{ fontFamily: font.family }}>الخطط المغلقة ({closedPlans.length})</h3>
           {closedPlans.map((plan) => (
-            <div key={plan.id} style={{ border: '1px solid #eee', borderRadius: 8, padding: 10, marginBottom: 8, fontSize: 13 }}>
+            <div key={plan.id} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: 10, marginBottom: 8, fontSize: 13 }}>
               <strong>{plan.studentName}</strong> — {plan.skillTitle} — {STATUS_TEXT[plan.status]}
             </div>
           ))}
