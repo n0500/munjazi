@@ -8,7 +8,7 @@ import {
   listClassAssignments,
   removeAssignment,
 } from '../lib/classesApi';
-import { listSchoolTeachers } from '../lib/teachersApi';
+import { listSchoolTeachers, setTeacherDisabled } from '../lib/teachersApi';
 import { listClassStudents } from '../lib/studentsApi';
 import ClassDetail from './ClassDetail';
 import { colors, font, radius, spacing } from '../lib/theme';
@@ -25,6 +25,7 @@ export default function AdminDashboard({ schoolId }) {
   const [school, setSchool] = useState(null);
   const [classes, setClasses] = useState([]);
   const [teachers, setTeachers] = useState([]);
+  const [assignments, setAssignments] = useState([]);
   const [studentCounts, setStudentCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -39,6 +40,9 @@ export default function AdminDashboard({ schoolId }) {
   const [assignTeacherUid, setAssignTeacherUid] = useState('');
   const [assignSubject, setAssignSubject] = useState('');
   const [assigning, setAssigning] = useState(false);
+
+  const [togglingTeacherUid, setTogglingTeacherUid] = useState(null);
+  const [confirmDisableUid, setConfirmDisableUid] = useState(null);
 
   async function refresh() {
     setLoading(true);
@@ -60,6 +64,11 @@ export default function AdminDashboard({ schoolId }) {
         }),
       );
       setStudentCounts(Object.fromEntries(countsEntries));
+
+      const assignmentsEntries = await Promise.all(
+        classRows.map((c) => listClassAssignments(schoolId, c.id)),
+      );
+      setAssignments(assignmentsEntries.flat());
     } catch (err) {
       setError(err.message || 'تعذّر تحميل بيانات المدرسة.');
     } finally {
@@ -127,6 +136,7 @@ export default function AdminDashboard({ schoolId }) {
       setAssignSubject('');
       const rows = await listClassAssignments(schoolId, classId);
       setAssignmentsByClass((prev) => ({ ...prev, [classId]: rows }));
+      await refresh();
     } catch (err) {
       setError(err.message || 'تعذّر إسناد المعلّمة.');
     } finally {
@@ -140,6 +150,7 @@ export default function AdminDashboard({ schoolId }) {
       await removeAssignment(schoolId, assignmentId);
       const rows = await listClassAssignments(schoolId, classId);
       setAssignmentsByClass((prev) => ({ ...prev, [classId]: rows }));
+      await refresh();
     } catch (err) {
       setError(err.message || 'تعذّر إزالة الإسناد.');
     }
@@ -150,6 +161,34 @@ export default function AdminDashboard({ schoolId }) {
     navigator.clipboard.writeText(link);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 3000);
+  }
+
+  function assignedClassesCountFor(teacherUid) {
+    return assignments.filter((a) => a.teacherUid === teacherUid).length;
+  }
+
+  function handleToggleTeacherClick(teacher) {
+    const willDisable = !teacher.disabled;
+    const hasAssignments = assignedClassesCountFor(teacher.uid) > 0;
+    if (willDisable && hasAssignments) {
+      setConfirmDisableUid(teacher.uid);
+      return;
+    }
+    performToggleTeacher(teacher);
+  }
+
+  async function performToggleTeacher(teacher) {
+    setError('');
+    setConfirmDisableUid(null);
+    setTogglingTeacherUid(teacher.uid);
+    try {
+      await setTeacherDisabled(teacher.uid, !teacher.disabled);
+      await refresh();
+    } catch (err) {
+      setError(err.message || 'تعذّر تحديث حالة حساب المعلّمة.');
+    } finally {
+      setTogglingTeacherUid(null);
+    }
   }
 
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
@@ -300,15 +339,52 @@ export default function AdminDashboard({ schoolId }) {
           {teachers.length === 0 ? (
             <p style={{ color: colors.textMuted }}>لا توجد معلّمات مسجَّلات بعد.</p>
           ) : (
-            teachers.map((t) => (
-              <div key={t.uid} style={{ padding: spacing.sm + 4, borderTop: `1px solid ${colors.border}` }}>
-                {t.displayName} {t.disabled && <em style={{ color: colors.red }}>(معطّلة)</em>}
-              </div>
-            ))
+            teachers.map((t) => {
+              const assignedCount = assignedClassesCountFor(t.uid);
+              return (
+                <div key={t.uid} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.md, marginBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                    <div>
+                      <div style={{ fontWeight: 'bold', fontFamily: font.family }}>
+                        {t.displayName} {t.disabled && <em style={{ color: colors.red, fontWeight: 'normal' }}>(معطّلة)</em>}
+                      </div>
+                      <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                        {assignedCount > 0 ? `مسندة إلى ${assignedCount} فصل` : 'غير مسندة إلى أي فصل حاليًا'}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleToggleTeacherClick(t)}
+                      disabled={togglingTeacherUid === t.uid}
+                      style={{
+                        padding: '6px 14px',
+                        background: t.disabled ? colors.primary : colors.red,
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: radius.button,
+                        fontSize: 13,
+                      }}
+                    >
+                      {togglingTeacherUid === t.uid ? '...' : t.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب'}
+                    </button>
+                  </div>
+
+                  {confirmDisableUid === t.uid && (
+                    <div style={{ marginTop: spacing.sm, background: colors.amberTint, border: `1px solid ${colors.amberBorder}`, borderRadius: radius.button, padding: spacing.sm, fontSize: 13, color: colors.amber }}>
+                      هذه المعلّمة مسندة حاليًا إلى {assignedCount} {assignedCount === 1 ? 'فصل' : 'فصول'}. يُرجى التأكد من نقل الإسناد إلى معلّمة أخرى إن دعت الحاجة قبل المتابعة.
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button onClick={() => performToggleTeacher(t)} style={{ padding: '5px 12px', background: colors.red, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12 }}>
+                          تعطيل الحساب مع ذلك
+                        </button>
+                        <button onClick={() => setConfirmDisableUid(null)} style={{ padding: '5px 12px', background: '#fff', border: `1px solid ${colors.border}`, borderRadius: 6, fontSize: 12 }}>
+                          إلغاء
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
-          <p style={{ fontSize: 12, color: colors.textMuted, marginTop: spacing.md }}>
-            سيُضاف قريبًا: عدد الفصول المسندة لكل معلّمة، وإمكانية تعطيل الحساب وتفعيله.
-          </p>
         </>
       )}
 
