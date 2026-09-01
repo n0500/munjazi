@@ -304,6 +304,7 @@ export default function AdminDashboard({ schoolId }) {
         className={reportTarget.className}
         subject={reportTarget.subject}
         teacherName={reportTarget.teacherName}
+        defaultWeekName={reportTarget.weekName}
         onBack={() => setReportTarget(null)}
       />
     );
@@ -548,8 +549,9 @@ export default function AdminDashboard({ schoolId }) {
                         </td>
                         <td style={{ padding: 8 }}>
                           <button
-                            onClick={() => setReportTarget({ classId: r.classId, teacherUid: r.teacherUid, className: r.className, subject: r.subject, teacherName: r.teacherName })}
-                            style={{ padding: '4px 10px', background: '#f2f2f2', border: 'none', borderRadius: 6, fontSize: 12 }}
+                            onClick={() => setReportTarget({ classId: r.classId, teacherUid: r.teacherUid, className: r.className, subject: r.subject, teacherName: r.teacherName, weekName: r.weekName })}
+                            disabled={!r.weekName}
+                            style={{ padding: '4px 10px', background: '#f2f2f2', border: 'none', borderRadius: 6, fontSize: 12, opacity: r.weekName ? 1 : 0.5 }}
                           >
                             تقرير
                           </button>
