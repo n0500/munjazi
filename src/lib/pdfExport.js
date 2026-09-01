@@ -2,7 +2,8 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 // يحوّل عنصر HTML إلى PDF متعدد الصفحات، مع الحفاظ على أي روابط <a href> بداخله
-// قابلة للنقر فعليًا داخل ملف الـPDF (يشتغل تلقائيًا لأي تقرير يستخدم هذه الدالة)
+// قابلة للنقر فعليًا داخل ملف الـPDF، ومع تفادي قطع أي عنصر مُعلَّم بصنف
+// "pdf-avoid-break" بمنتصف صفحتين — يُنقل القسم كاملًا للصفحة التالية بدلًا من ذلك.
 export async function exportElementToPdf(element, filename, orientation = 'p') {
   const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
   const imgData = canvas.toDataURL('image/png');
@@ -17,6 +18,7 @@ export async function exportElementToPdf(element, filename, orientation = 'p') {
   // نسبة تحويل من بكسل (حجم العنصر بالمتصفح) إلى مليمتر (حجم صفحة الـPDF)
   const ratio = imgWidth / element.offsetWidth;
   const elementRect = element.getBoundingClientRect();
+
   const links = Array.from(element.querySelectorAll('a[href]')).map((a) => {
     const r = a.getBoundingClientRect();
     return {
@@ -28,29 +30,46 @@ export async function exportElementToPdf(element, filename, orientation = 'p') {
     };
   });
 
-  function addLinksForPage(pageTopMm) {
+  // حدود كل قسم "لا يجوز قطعه" (بالمليمتر، نسبةً لأعلى العنصر كامل) — لو صادفت
+  // القص المنطقي لصفحة، ننقل نقطة القطع لتكون قبل بداية القسم بدلًا من داخله
+  const noBreakBlocks = Array.from(element.querySelectorAll('.pdf-avoid-break')).map((el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      top: (r.top - elementRect.top) * ratio,
+      bottom: (r.bottom - elementRect.top) * ratio,
+    };
+  });
+
+  function addLinksForRange(topMm, bottomMm) {
     links.forEach((l) => {
-      if (l.y >= pageTopMm && l.y < pageTopMm + pageHeight) {
-        pdf.link(l.x, l.y - pageTopMm, l.w, l.h, { url: l.url });
+      if (l.y >= topMm && l.y < bottomMm) {
+        pdf.link(l.x, l.y - topMm, l.w, l.h, { url: l.url });
       }
     });
   }
 
-  let heightLeft = imgHeight;
-  let position = 0;
-  let pageTopMm = 0;
+  let currentTopMm = 0;
+  let firstPage = true;
 
-  pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-  addLinksForPage(pageTopMm);
-  heightLeft -= pageHeight;
+  while (currentTopMm < imgHeight) {
+    let pageBottomMm = Math.min(currentTopMm + pageHeight, imgHeight);
 
-  while (heightLeft > 0) {
-    pageTopMm += pageHeight;
-    position = heightLeft - imgHeight;
-    pdf.addPage();
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-    addLinksForPage(pageTopMm);
-    heightLeft -= pageHeight;
+    // لو فيه قسم يبدأ داخل هذي الصفحة لكن ينتهي بعدها (يعني راح ينقطع)، نقصّ الصفحة قبله
+    const breakingBlock = noBreakBlocks
+      .filter((b) => b.top > currentTopMm && b.top < pageBottomMm && b.bottom > pageBottomMm)
+      .sort((a, b) => a.top - b.top)[0];
+
+    if (breakingBlock && breakingBlock.top > currentTopMm) {
+      pageBottomMm = breakingBlock.top;
+    }
+
+    if (!firstPage) pdf.addPage();
+    firstPage = false;
+
+    pdf.addImage(imgData, 'PNG', 0, -currentTopMm, imgWidth, imgHeight);
+    addLinksForRange(currentTopMm, pageBottomMm);
+
+    currentTopMm = pageBottomMm;
   }
 
   pdf.save(filename);
