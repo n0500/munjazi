@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { listWeeksForClass } from '../lib/weeksApi';
 import { buildClassWeekReportData, buildClassRangeReportData } from '../lib/reportsApi';
-import { exportElementToPdf } from '../lib/pdfExport';
+import { exportElementToPdf, exportClassWeekReportWithRepeatingHeader } from '../lib/pdfExport';
 import { STATUS_ICONS, STATUS_COLORS } from '../lib/recommendationsApi';
 import { colors, font, radius, spacing } from '../lib/theme';
 
@@ -38,14 +38,6 @@ const STATUS_KEYS = [
   { key: 'absent', label: 'غائبة' },
 ];
 
-const SINGLE_WEEK_PDF_OPTIONS = {
-  repeatHeaderSelector: '.pdf-repeat-header',
-  repeatTableHeaderSelector: '.pdf-repeat-table-head',
-};
-const RANGE_PDF_OPTIONS = {
-  repeatHeaderSelector: '.pdf-repeat-header',
-};
-
 export default function ClassReport({ schoolId, classId, teacherUid, className, subject, teacherName, onBack, defaultWeekName }) {
   const [weeks, setWeeks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +52,9 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
   const [weekReport, setWeekReport] = useState(null);
   const [rangeReport, setRangeReport] = useState(null);
 
-  const reportRef = useRef(null);
+  const rangeReportRef = useRef(null);
+  const weekHeaderRef = useRef(null);
+  const weekTableRef = useRef(null);
   const autoGenerateTriedRef = useRef(false);
 
   useEffect(() => {
@@ -77,6 +71,15 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
       }
     })();
   }, [schoolId, classId, teacherUid]);
+
+  async function downloadWeekReportPdf(weekName) {
+    if (!weekHeaderRef.current || !weekTableRef.current) return;
+    await exportClassWeekReportWithRepeatingHeader(
+      { headerEl: weekHeaderRef.current, tableEl: weekTableRef.current },
+      `تقرير-فصل-${weekName}.pdf`,
+      'l',
+    );
+  }
 
   async function generateSingleWeekReport(targetWeekId, { download } = { download: true }) {
     const week = weeks.find((w) => w.id === targetWeekId);
@@ -99,7 +102,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
       setRangeReport(null);
       if (download) {
         await new Promise((resolve) => setTimeout(resolve, 100));
-        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-${week.name}.pdf`, 'l', SINGLE_WEEK_PDF_OPTIONS);
+        await downloadWeekReportPdf(week.name);
       }
     } catch (err) {
       setError(err.message || 'تعذّر توليد التقرير.');
@@ -142,7 +145,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
         setRangeReport(data);
         setWeekReport(null);
         await new Promise((resolve) => setTimeout(resolve, 100));
-        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-ملخص.pdf`, 'l', RANGE_PDF_OPTIONS);
+        if (rangeReportRef.current) await exportElementToPdf(rangeReportRef.current, `تقرير-فصل-ملخص.pdf`, 'l');
       }
     } catch (err) {
       setError(err.message || 'تعذّر توليد التقرير.');
@@ -152,13 +155,12 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
   }
 
   async function handleDownloadCurrent() {
-    if (!reportRef.current) return;
     setGenerating(true);
     try {
       if (weekReport) {
-        await exportElementToPdf(reportRef.current, `تقرير-فصل-${weekReport.weekName}.pdf`, 'l', SINGLE_WEEK_PDF_OPTIONS);
-      } else {
-        await exportElementToPdf(reportRef.current, `تقرير-فصل-ملخص.pdf`, 'l', RANGE_PDF_OPTIONS);
+        await downloadWeekReportPdf(weekReport.weekName);
+      } else if (rangeReportRef.current) {
+        await exportElementToPdf(rangeReportRef.current, `تقرير-فصل-ملخص.pdf`, 'l');
       }
     } catch (err) {
       setError(err.message || 'تعذّر تحميل التقرير.');
@@ -228,134 +230,134 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
         </button>
       </form>
 
-      {(weekReport || rangeReport) && (
+      {weekReport && (
         <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
-          <div ref={reportRef} style={{ width: 1050, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
-            {weekReport && (
-              <>
-                <div className="pdf-repeat-header" style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 20, background: '#fff' }}>
-                  <div style={{ fontSize: 13, color: '#666' }}>{weekReport.schoolName}</div>
-                  <div style={{ fontSize: 13, color: '#666' }}>المادة: {weekReport.subject || 'غير محددة'}</div>
-                  <div style={{ fontSize: 13, color: '#666' }}>{weekReport.weekName} — {weekReport.weekTypeLabel}</div>
-                  <div style={{ fontSize: 16, fontWeight: 'bold', marginTop: 6 }}>تقرير فصل — {weekReport.className}</div>
-                </div>
-                {weekReport.enrichmentLink && (
-                  <p style={{ fontSize: 12 }}>
-                    الرابط الإثرائي: <a href={weekReport.enrichmentLink} target="_blank" rel="noreferrer">{weekReport.enrichmentLink}</a>
-                  </p>
-                )}
-                <div style={{ display: 'flex', gap: 10, margin: '14px 0', fontSize: 13 }}>
-                  {STATUS_KEYS.map((s) => (
-                    <span key={s.key}>{s.label}: {weekReport.classCounts[s.key]}</span>
+          <div style={{ width: 1050, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
+            <div ref={weekHeaderRef} style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 20, background: '#fff', width: 990 }}>
+              <div style={{ fontSize: 13, color: '#666' }}>{weekReport.schoolName}</div>
+              <div style={{ fontSize: 13, color: '#666' }}>المادة: {weekReport.subject || 'غير محددة'}</div>
+              <div style={{ fontSize: 13, color: '#666' }}>{weekReport.weekName} — {weekReport.weekTypeLabel}</div>
+              <div style={{ fontSize: 16, fontWeight: 'bold', marginTop: 6 }}>تقرير فصل — {weekReport.className}</div>
+              {weekReport.enrichmentLink && (
+                <p style={{ fontSize: 12, marginTop: 8 }}>
+                  الرابط الإثرائي: {weekReport.enrichmentLink}
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', margin: '10px 0 0', fontSize: 13 }}>
+                {STATUS_KEYS.map((s) => (
+                  <span key={s.key}>{s.label}: {weekReport.classCounts[s.key]}</span>
+                ))}
+              </div>
+            </div>
+
+            <table ref={weekTableRef} style={{ width: 990, borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>الطالبة</th>
+                  {weekReport.skillTitles.map((t, i) => (
+                    <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>{t}</th>
                   ))}
-                </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead className="pdf-repeat-table-head" style={{ background: '#fff' }}>
-                    <tr>
-                      <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>الطالبة</th>
-                      {weekReport.skillTitles.map((t, i) => (
-                        <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>{t}</th>
-                      ))}
-                      <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>التوصية</th>
-                      <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>الإجراء</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {weekReport.rows.map((row, i) => (
-                      <tr key={i} className="pdf-avoid-break">
-                        <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
-                        {row.cells.map((c, j) => (
-                          <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
-                        ))}
-                        <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.recommendation}</td>
-                        <td style={{ padding: 4, borderBottom: '1px solid #eee' }}><ActionsCell actions={row.activeActions} /></td>
-                      </tr>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>التوصية</th>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>الإجراء</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weekReport.rows.map((row, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
+                    {row.cells.map((c, j) => (
+                      <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
                     ))}
-                  </tbody>
-                </table>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 30, paddingTop: 16, borderTop: '1px solid #ccc', fontSize: 13 }}>
-                  <span>مديرة المدرسة: {weekReport.principalName || '—'}</span>
-                  <span>المعلّمة: {weekReport.teacherName}</span>
-                </div>
-                <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: '#999' }}>
-                  صادر من منجزي
-                </div>
-              </>
-            )}
+                    <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.recommendation}</td>
+                    <td style={{ padding: 4, borderBottom: '1px solid #eee' }}><ActionsCell actions={row.activeActions} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-            {rangeReport && (
-              <>
-                <div className="pdf-repeat-header" style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 20, background: '#fff' }}>
-                  <div style={{ fontSize: 13, color: '#666' }}>{rangeReport.schoolName}</div>
-                  <div style={{ fontSize: 13, color: '#666' }}>المادة: {rangeReport.subject || 'غير محددة'}</div>
-                  <div style={{ fontSize: 13, color: '#666' }}>من {rangeReport.fromWeekName} إلى {rangeReport.toWeekName}</div>
-                  <div style={{ fontSize: 16, fontWeight: 'bold', marginTop: 6 }}>تقرير فصل — {rangeReport.className}</div>
-                </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 30, paddingTop: 16, borderTop: '1px solid #ccc', fontSize: 13, width: 990 }}>
+              <span>مديرة المدرسة: {weekReport.principalName || '—'}</span>
+              <span>المعلّمة: {weekReport.teacherName}</span>
+            </div>
+            <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: '#999', width: 990 }}>
+              صادر من منجزي
+            </div>
+          </div>
+        </div>
+      )}
 
-                {rangeReport.weeks.map((w, wIdx) => {
-                  const isLastWeek = wIdx === rangeReport.weeks.length - 1;
-                  return (
-                    <div key={w.id} className="pdf-avoid-break" style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 14 }}>
-                      <h3 style={{ margin: '0 0 8px' }}>{w.name} — {w.typeLabel}</h3>
-                      {w.enrichmentLink && (
-                        <p style={{ fontSize: 12 }}>
-                          الرابط الإثرائي: <a href={w.enrichmentLink} target="_blank" rel="noreferrer">{w.enrichmentLink}</a>
-                        </p>
-                      )}
-                      {w.skillTitles.length === 0 ? (
-                        <p style={{ fontSize: 12, color: '#999' }}>لا توجد مهارات بهذا الأسبوع.</p>
-                      ) : (
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                          <thead>
-                            <tr>
-                              <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الطالبة</th>
-                              {w.skillTitles.map((t, i) => (
-                                <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>{t}</th>
-                              ))}
-                              <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>التوصية</th>
-                              {isLastWeek && (
-                                <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الإجراء (الوضع الحالي)</th>
-                              )}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {w.rows.map((row, i) => (
-                              <tr key={i}>
-                                <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
-                                {row.cells.map((c, j) => (
-                                  <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
-                                ))}
-                                <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.recommendation}</td>
-                                {isLastWeek && (
-                                  <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>
-                                    <ActionsCell actions={rangeReport.studentActiveActions?.[row.name]} />
-                                  </td>
-                                )}
-                              </tr>
+      {rangeReport && (
+        <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
+          <div ref={rangeReportRef} style={{ width: 1050, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
+            <div style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: '#666' }}>{rangeReport.schoolName}</div>
+              <div style={{ fontSize: 13, color: '#666' }}>المادة: {rangeReport.subject || 'غير محددة'}</div>
+              <div style={{ fontSize: 13, color: '#666' }}>من {rangeReport.fromWeekName} إلى {rangeReport.toWeekName}</div>
+              <div style={{ fontSize: 16, fontWeight: 'bold', marginTop: 6 }}>تقرير فصل — {rangeReport.className}</div>
+            </div>
+
+            {rangeReport.weeks.map((w, wIdx) => {
+              const isLastWeek = wIdx === rangeReport.weeks.length - 1;
+              return (
+                <div key={w.id} className="pdf-avoid-break" style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 14 }}>
+                  <h3 style={{ margin: '0 0 8px' }}>{w.name} — {w.typeLabel}</h3>
+                  {w.enrichmentLink && (
+                    <p style={{ fontSize: 12 }}>
+                      الرابط الإثرائي: <a href={w.enrichmentLink} target="_blank" rel="noreferrer">{w.enrichmentLink}</a>
+                    </p>
+                  )}
+                  {w.skillTitles.length === 0 ? (
+                    <p style={{ fontSize: 12, color: '#999' }}>لا توجد مهارات بهذا الأسبوع.</p>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الطالبة</th>
+                          {w.skillTitles.map((t, i) => (
+                            <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>{t}</th>
+                          ))}
+                          <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>التوصية</th>
+                          {isLastWeek && (
+                            <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الإجراء (الوضع الحالي)</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {w.rows.map((row, i) => (
+                          <tr key={i}>
+                            <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
+                            {row.cells.map((c, j) => (
+                              <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
                             ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  );
-                })}
+                            <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.recommendation}</td>
+                            {isLastWeek && (
+                              <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>
+                                <ActionsCell actions={rangeReport.studentActiveActions?.[row.name]} />
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              );
+            })}
 
-                <div style={{ display: 'flex', gap: 10, margin: '14px 0', fontSize: 13 }}>
-                  <strong>ملخص إحصائي إجمالي:</strong>
-                  {STATUS_KEYS.map((s) => (
-                    <span key={s.key}>{s.label}: {rangeReport.classCounts[s.key]}</span>
-                  ))}
-                </div>
+            <div style={{ display: 'flex', gap: 10, margin: '14px 0', fontSize: 13 }}>
+              <strong>ملخص إحصائي إجمالي:</strong>
+              {STATUS_KEYS.map((s) => (
+                <span key={s.key}>{s.label}: {rangeReport.classCounts[s.key]}</span>
+              ))}
+            </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 30, paddingTop: 16, borderTop: '1px solid #ccc', fontSize: 13 }}>
-                  <span>مديرة المدرسة: {rangeReport.principalName || '—'}</span>
-                  <span>المعلّمة: {rangeReport.teacherName}</span>
-                </div>
-                <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: '#999' }}>
-                  صادر من منجزي
-                </div>
-              </>
-            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 30, paddingTop: 16, borderTop: '1px solid #ccc', fontSize: 13 }}>
+              <span>مديرة المدرسة: {rangeReport.principalName || '—'}</span>
+              <span>المعلّمة: {rangeReport.teacherName}</span>
+            </div>
+            <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: '#999' }}>
+              صادر من منجزي
+            </div>
           </div>
         </div>
       )}
