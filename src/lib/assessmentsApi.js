@@ -3,12 +3,14 @@ import {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
   getDocs,
   query,
   where,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { listSkillsForWeek } from './skillsApi';
 
 function assessmentDocId(skillId, studentId) {
   return `${skillId}_${studentId}`;
@@ -36,6 +38,30 @@ export async function getStudentAssessment(schoolId, skillId, studentId) {
   return snap.exists() ? snap.data() : null;
 }
 
+// يعيد حساب ملخص أسبوع كامل (عدد كل حالة) ويخزّنه جاهزًا على وثيقة الأسبوع نفسها،
+// عشان صفحات المتابعة (زي متابعة الرصد بلوحة الإدارة) تقرأ رقمًا جاهزًا بدل ما تحسبه من جديد كل مرة
+async function recomputeWeekSummary(schoolId, weekId) {
+  try {
+    const skills = await listSkillsForWeek(schoolId, weekId);
+    const counts = { mastered: 0, needsSupport: 0, notMastered: 0, absent: 0 };
+    await Promise.all(
+      skills.map(async (skill) => {
+        const assessments = await listAssessmentsForSkill(schoolId, skill.id);
+        Object.values(assessments).forEach((a) => {
+          if (a.status && counts[a.status] !== undefined) counts[a.status] += 1;
+        });
+      }),
+    );
+    await updateDoc(doc(db, 'schools', schoolId, 'weeks', weekId), {
+      summaryCounts: counts,
+      summaryUpdatedAt: serverTimestamp(),
+    });
+  } catch (err) {
+    // فشل حساب الملخّص المخزَن لا يجب أن يوقف عملية الحفظ الأساسية للتقييم نفسه
+    console.error('تعذر تحديث ملخّص الأسبوع:', err);
+  }
+}
+
 export async function setAssessment(schoolId, { skillId, weekId, classId, teacherUid, studentId, status, recommendationText }) {
   const id = assessmentDocId(skillId, studentId);
   await setDoc(doc(db, 'schools', schoolId, 'assessments', id), {
@@ -48,12 +74,13 @@ export async function setAssessment(schoolId, { skillId, weekId, classId, teache
     recommendationText: recommendationText || '',
     updatedAt: serverTimestamp(),
   });
+  await recomputeWeekSummary(schoolId, weekId);
 }
 
 export async function setAllMasteredForSkill(schoolId, { skillId, weekId, classId, teacherUid, studentIds }) {
   await Promise.all(
     studentIds.map((studentId) =>
-      setAssessment(schoolId, {
+      setDoc(doc(db, 'schools', schoolId, 'assessments', assessmentDocId(skillId, studentId)), {
         skillId,
         weekId,
         classId,
@@ -61,7 +88,10 @@ export async function setAllMasteredForSkill(schoolId, { skillId, weekId, classI
         studentId,
         status: 'mastered',
         recommendationText: '',
+        updatedAt: serverTimestamp(),
       }),
     ),
   );
+  // إعادة حساب واحدة بس لكل الأسبوع بعد التعيين الجماعي، بدل تكرارها لكل طالبة
+  await recomputeWeekSummary(schoolId, weekId);
 }
