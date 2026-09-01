@@ -3,6 +3,8 @@ import { getSchool } from '../lib/schoolsApi';
 import {
   listClasses,
   createClass,
+  updateClassName,
+  deleteClassIfEmpty,
   setClassArchived,
   linkTeacherToClass,
   listClassAssignments,
@@ -58,6 +60,11 @@ export default function AdminDashboard({ schoolId }) {
   const [assignTeacherUid, setAssignTeacherUid] = useState('');
   const [assignSubject, setAssignSubject] = useState('');
   const [assigning, setAssigning] = useState(false);
+
+  const [editingClassId, setEditingClassId] = useState(null);
+  const [editClassNameValue, setEditClassNameValue] = useState('');
+  const [savingClassName, setSavingClassName] = useState(false);
+  const [deletingClassId, setDeletingClassId] = useState(null);
 
   const [trackingRows, setTrackingRows] = useState(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
@@ -190,6 +197,39 @@ export default function AdminDashboard({ schoolId }) {
     }
   }
 
+  function startEditClassName(cls) {
+    setEditingClassId(cls.id);
+    setEditClassNameValue(cls.name);
+  }
+
+  async function handleSaveClassName(classId) {
+    setError('');
+    setSavingClassName(true);
+    try {
+      await updateClassName(schoolId, classId, editClassNameValue);
+      setEditingClassId(null);
+      await refresh();
+    } catch (err) {
+      setError(err.message || 'تعذّر تعديل اسم الفصل.');
+    } finally {
+      setSavingClassName(false);
+    }
+  }
+
+  async function handleDeleteClass(cls) {
+    if (!window.confirm(`متأكدة تبين تحذفين فصل "${cls.name}"؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
+    setError('');
+    setDeletingClassId(cls.id);
+    try {
+      await deleteClassIfEmpty(schoolId, cls.id);
+      await refresh();
+    } catch (err) {
+      setError(err.message || 'تعذّر حذف الفصل.');
+    } finally {
+      setDeletingClassId(null);
+    }
+  }
+
   async function toggleAssignExpand(classId) {
     if (assignExpandedId === classId) {
       setAssignExpandedId(null);
@@ -237,7 +277,7 @@ export default function AdminDashboard({ schoolId }) {
       setTrackingRows(null);
       await refresh();
     } catch (err) {
-      setError(err.message || 'تعذّر إزالة الإسناد.');
+      setError(err.message || 'تعذر إزالة الإسناد.');
     }
   }
 
@@ -250,6 +290,10 @@ export default function AdminDashboard({ schoolId }) {
 
   function assignedClassesCountFor(teacherUid) {
     return assignments.filter((a) => a.teacherUid === teacherUid).length;
+  }
+
+  function classAssignmentsCountFor(classId) {
+    return assignments.filter((a) => a.classId === classId).length;
   }
 
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
@@ -363,48 +407,82 @@ export default function AdminDashboard({ schoolId }) {
           {classes.length === 0 ? (
             <p style={{ color: colors.textMuted }}>لا توجد فصول بعد.</p>
           ) : (
-            classes.map((c) => (
-              <div key={c.id} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.button, marginBottom: 10, padding: spacing.md }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                  <button onClick={() => setSelectedClassId(c.id)} style={{ background: 'none', border: 'none', color: colors.ink, fontWeight: 'bold', fontSize: 16, textAlign: 'right', cursor: 'pointer', fontFamily: font.family }}>
-                    {c.name} {c.archived && <em style={{ color: colors.red }}>(مؤرشف)</em>}
-                  </button>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => toggleAssignExpand(c.id)} style={{ padding: '6px 12px', background: '#f2f2f2', border: 'none', borderRadius: 6 }}>
-                      {assignExpandedId === c.id ? 'إخفاء المعلّمات' : 'إسناد معلّمة'}
-                    </button>
-                    <button onClick={() => handleToggleClass(c)} style={{ padding: '6px 12px', background: c.archived ? colors.primary : colors.red, color: '#fff', border: 'none', borderRadius: 6 }}>
-                      {c.archived ? 'إلغاء الأرشفة' : 'أرشفة'}
-                    </button>
-                  </div>
-                </div>
-
-                {assignExpandedId === c.id && (
-                  <div style={{ marginTop: spacing.sm, borderTop: `1px solid ${colors.border}`, paddingTop: spacing.sm }}>
-                    {(assignmentsByClass[c.id] || []).map((a) => (
-                      <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                        <span>{a.teacherName} — {a.subject || 'بدون مادة'}</span>
-                        <button onClick={() => handleRemoveAssignment(c.id, a.id)} style={{ padding: '2px 8px', background: colors.red, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12 }}>
-                          إزالة
-                        </button>
-                      </div>
-                    ))}
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                      <select value={assignTeacherUid} onChange={(e) => setAssignTeacherUid(e.target.value)} style={{ flex: 1, padding: 6, minWidth: 140 }}>
-                        <option value="">اختيار معلّمة</option>
-                        {teachers.map((t) => (
-                          <option key={t.uid} value={t.uid}>{t.displayName}</option>
-                        ))}
-                      </select>
-                      <input type="text" placeholder="المادة" value={assignSubject} onChange={(e) => setAssignSubject(e.target.value)} style={{ flex: 1, padding: 6, minWidth: 100 }} />
-                      <button onClick={() => handleAssign(c.id)} disabled={assigning} style={{ padding: '6px 14px', background: colors.primary, color: '#fff', border: 'none', borderRadius: 6 }}>
-                        {assigning ? '...' : 'إسناد'}
+            classes.map((c) => {
+              const isEmpty = (studentCounts[c.id] || 0) === 0 && classAssignmentsCountFor(c.id) === 0;
+              const isEditing = editingClassId === c.id;
+              return (
+                <div key={c.id} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.button, marginBottom: 10, padding: spacing.md }}>
+                  {isEditing ? (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <input
+                        type="text"
+                        value={editClassNameValue}
+                        onChange={(e) => setEditClassNameValue(e.target.value)}
+                        style={{ flex: 1, padding: 8, minWidth: 140 }}
+                        autoFocus
+                      />
+                      <button onClick={() => handleSaveClassName(c.id)} disabled={savingClassName} style={{ padding: '6px 12px', background: colors.primary, color: '#fff', border: 'none', borderRadius: 6 }}>
+                        {savingClassName ? '...' : 'حفظ'}
+                      </button>
+                      <button onClick={() => setEditingClassId(null)} style={{ padding: '6px 12px', background: '#f2f2f2', border: 'none', borderRadius: 6 }}>
+                        إلغاء
                       </button>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <button onClick={() => setSelectedClassId(c.id)} style={{ background: 'none', border: 'none', color: colors.ink, fontWeight: 'bold', fontSize: 16, textAlign: 'right', cursor: 'pointer', fontFamily: font.family }}>
+                        {c.name} {c.archived && <em style={{ color: colors.red }}>(مؤرشف)</em>}
+                      </button>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button onClick={() => startEditClassName(c)} style={{ padding: '6px 12px', background: '#f2f2f2', border: 'none', borderRadius: 6 }}>
+                          تعديل الاسم
+                        </button>
+                        <button onClick={() => toggleAssignExpand(c.id)} style={{ padding: '6px 12px', background: '#f2f2f2', border: 'none', borderRadius: 6 }}>
+                          {assignExpandedId === c.id ? 'إخفاء المعلّمات' : 'إسناد معلّمة'}
+                        </button>
+                        <button onClick={() => handleToggleClass(c)} style={{ padding: '6px 12px', background: c.archived ? colors.primary : colors.red, color: '#fff', border: 'none', borderRadius: 6 }}>
+                          {c.archived ? 'إلغاء الأرشفة' : 'أرشفة'}
+                        </button>
+                        {isEmpty && (
+                          <button
+                            onClick={() => handleDeleteClass(c)}
+                            disabled={deletingClassId === c.id}
+                            style={{ padding: '6px 12px', background: colors.red, color: '#fff', border: 'none', borderRadius: 6 }}
+                          >
+                            {deletingClassId === c.id ? '...' : 'حذف'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {!isEditing && assignExpandedId === c.id && (
+                    <div style={{ marginTop: spacing.sm, borderTop: `1px solid ${colors.border}`, paddingTop: spacing.sm }}>
+                      {(assignmentsByClass[c.id] || []).map((a) => (
+                        <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                          <span>{a.teacherName} — {a.subject || 'بدون مادة'}</span>
+                          <button onClick={() => handleRemoveAssignment(c.id, a.id)} style={{ padding: '2px 8px', background: colors.red, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12 }}>
+                            إزالة
+                          </button>
+                        </div>
+                      ))}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                        <select value={assignTeacherUid} onChange={(e) => setAssignTeacherUid(e.target.value)} style={{ flex: 1, padding: 6, minWidth: 140 }}>
+                          <option value="">اختيار معلّمة</option>
+                          {teachers.map((t) => (
+                            <option key={t.uid} value={t.uid}>{t.displayName}</option>
+                          ))}
+                        </select>
+                        <input type="text" placeholder="المادة" value={assignSubject} onChange={(e) => setAssignSubject(e.target.value)} style={{ flex: 1, padding: 6, minWidth: 100 }} />
+                        <button onClick={() => handleAssign(c.id)} disabled={assigning} style={{ padding: '6px 14px', background: colors.primary, color: '#fff', border: 'none', borderRadius: 6 }}>
+                          {assigning ? '...' : 'إسناد'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
         </>
       )}
