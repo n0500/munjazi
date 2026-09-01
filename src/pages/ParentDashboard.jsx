@@ -41,6 +41,9 @@ function classifySubject(subject) {
   return 'notTracked';
 }
 
+// المواد بهذي الحالات تحتاج انتباهًا فوريًا، فتُفتح تلقائيًا بدون ضغط من ولي الأمر
+const AUTO_EXPAND_CLASSIFICATIONS = ['activeAction', 'notMastered'];
+
 const BADGE_CONFIG = {
   activeAction: { label: 'إجراء نشط', bg: colors.amberTint, text: colors.amber, border: colors.amberBorder },
   notMastered: { label: 'غير متقنة', bg: colors.redTint, text: colors.red, border: colors.redBorder },
@@ -59,8 +62,8 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
-  const [expandedSubject, setExpandedSubject] = useState(null);
-  const [focusOnWeakSkills, setFocusOnWeakSkills] = useState(false);
+  const [expandedSubjects, setExpandedSubjects] = useState(new Set());
+  const [focusMap, setFocusMap] = useState({});
 
   useEffect(() => {
     (async () => {
@@ -80,6 +83,18 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
           studentName: student.name,
         });
         setData(overview);
+
+        const autoExpand = new Set();
+        const autoFocus = {};
+        overview.subjects.forEach((s) => {
+          const classification = classifySubject(s);
+          if (AUTO_EXPAND_CLASSIFICATIONS.includes(classification)) {
+            autoExpand.add(s.teacherUid);
+            if (classification === 'notMastered') autoFocus[s.teacherUid] = true;
+          }
+        });
+        setExpandedSubjects(autoExpand);
+        setFocusMap(autoFocus);
 
         overview.subjects.forEach((s) => {
           s.activeActions
@@ -107,6 +122,25 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
         </button>
       </div>
     );
+  }
+
+  function toggleSubject(teacherUid, focus) {
+    setExpandedSubjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(teacherUid) && !focus) {
+        next.delete(teacherUid);
+      } else {
+        next.add(teacherUid);
+      }
+      return next;
+    });
+    if (focus) {
+      setFocusMap((prev) => ({ ...prev, [teacherUid]: true }));
+    }
+  }
+
+  function clearFocus(teacherUid) {
+    setFocusMap((prev) => ({ ...prev, [teacherUid]: false }));
   }
 
   const subjectsWithClass = data.subjects.map((s) => ({ ...s, classification: classifySubject(s) }));
@@ -167,7 +201,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
-        <span style={{ fontSize: 12, color: colors.textMuted }}>اضغط على المادة للتفاصيل</span>
+        <span style={{ fontSize: 12, color: colors.textMuted }}>المواد اللي تحتاج انتباهك مفتوحة تلقائيًا أدناه</span>
         <h3 style={{ fontSize: 15, margin: 0, fontFamily: font.family }}>المواد الدراسية</h3>
       </div>
 
@@ -195,7 +229,8 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
       ) : (
         filteredSubjects.map((s) => {
           const badge = BADGE_CONFIG[s.classification];
-          const isExpanded = expandedSubject === s.teacherUid;
+          const isExpanded = expandedSubjects.has(s.teacherUid);
+          const isFocused = !!focusMap[s.teacherUid];
           const remedial = s.activeActions.find((a) => a.type === 'remedial');
           const enrichment = s.activeActions.find((a) => a.type === 'enrichment');
           const weakSkills = weakSkillsFor(s);
@@ -204,7 +239,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
             <div key={s.teacherUid} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, marginBottom: spacing.sm, overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'stretch' }}>
                 <button
-                  onClick={() => { setExpandedSubject(isExpanded && !focusOnWeakSkills ? null : s.teacherUid); setFocusOnWeakSkills(false); }}
+                  onClick={() => toggleSubject(s.teacherUid, false)}
                   style={{ flex: 1, background: '#fff', border: 'none', padding: spacing.md, display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'right' }}
                 >
                   <span style={{ background: badge.bg, color: badge.text, border: `1px solid ${badge.border}`, borderRadius: radius.pill, padding: '3px 10px', fontSize: 11, whiteSpace: 'nowrap' }}>
@@ -220,7 +255,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
 
                 {weakSkills.length > 0 && (
                   <button
-                    onClick={() => { setExpandedSubject(s.teacherUid); setFocusOnWeakSkills(true); }}
+                    onClick={() => toggleSubject(s.teacherUid, true)}
                     style={{
                       background: colors.redTint, border: 'none', borderRight: `1px solid ${colors.border}`,
                       padding: '0 14px', color: colors.red, fontSize: 12, fontWeight: 'bold', whiteSpace: 'nowrap',
@@ -248,7 +283,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                     </div>
                   )}
 
-                  {focusOnWeakSkills && weakSkills.length > 0 ? (
+                  {isFocused && weakSkills.length > 0 ? (
                     <>
                       <p style={{ fontSize: 12, color: colors.red, fontWeight: 'bold', marginBottom: 6 }}>
                         مهارات غير متقنة بآخر أسبوع:
@@ -262,7 +297,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                         ))}
                       </div>
                       <button
-                        onClick={() => setFocusOnWeakSkills(false)}
+                        onClick={() => clearFocus(s.teacherUid)}
                         style={{ background: 'none', border: 'none', color: colors.primary, fontSize: 12, padding: 0, marginBottom: spacing.sm }}
                       >
                         عرض كل المهارات
