@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { updateActionText, listActionTemplatesForType, addActionTemplate } from '../lib/actionEngine';
+import { updateActionText, updateActionEnrichmentLink, listActionTemplatesForType, addActionTemplate } from '../lib/actionEngine';
 
 const TYPE_LABEL = {
   remedial: { icon: '⚠', text: 'علاجي' },
@@ -63,6 +63,7 @@ export default function ActionColumn({ schoolId, teacherUid, studentName, action
 
 function ActionModal({ schoolId, teacherUid, studentName, action, onClose, onChanged }) {
   const [text, setText] = useState(action.finalText || action.suggestedText);
+  const [enrichmentLink, setEnrichmentLink] = useState(action.enrichmentLink || '');
   const [templates, setTemplates] = useState([]);
   const [saving, setSaving] = useState(false);
   const label = TYPE_LABEL[action.type];
@@ -92,6 +93,9 @@ function ActionModal({ schoolId, teacherUid, studentName, action, onClose, onCha
     setSaving(true);
     try {
       await updateActionText(schoolId, { actionId: action.id, finalText: text });
+      if (action.type === 'enrichment') {
+        await updateActionEnrichmentLink(schoolId, { actionId: action.id, enrichmentLink });
+      }
       onChanged();
     } finally {
       setSaving(false);
@@ -145,6 +149,21 @@ function ActionModal({ schoolId, teacherUid, studentName, action, onClose, onCha
           rows={3}
           style={{ width: '100%', border: '1px solid #ccc', borderRadius: 8, padding: 8, fontSize: 13, marginBottom: 16 }}
         />
+
+        {action.type === 'enrichment' && (
+          <>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+              الرابط الإثرائي المرتبط بهذا الإجراء (اختياري)
+            </label>
+            <input
+              type="text"
+              value={enrichmentLink}
+              onChange={(e) => setEnrichmentLink(e.target.value)}
+              placeholder="https://..."
+              style={{ width: '100%', border: '1px solid #ccc', borderRadius: 8, padding: 8, fontSize: 13, marginBottom: 16, boxSizing: 'border-box' }}
+            />
+          </>
+        )}
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
           <button onClick={onClose} style={{ padding: '6px 12px', fontSize: 13, color: '#777', background: 'none', border: 'none', borderRadius: 8 }}>
