@@ -201,7 +201,7 @@ export default function StudentReport({ schoolId, classId, teacherUid, className
       </form>
 
       {reportData && (
-        <div style={{ position: 'fixed', top: -99999, left: -99999 }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
           <div ref={reportRef} style={{ width: 700, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
             <div className="pdf-avoid-break" style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
               <div style={{ fontSize: 13, color: '#666' }}>{reportData.schoolName}</div>
