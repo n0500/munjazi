@@ -19,7 +19,7 @@ function StatusBadge({ status, statusLabel }) {
 function ActiveActionsSection({ activeActions }) {
   if (!activeActions || activeActions.length === 0) return null;
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div className="pdf-avoid-break" style={{ marginBottom: 16 }}>
       {activeActions.map((a, i) => {
         const isRemedial = a.type === 'remedial';
         const bg = isRemedial ? '#fdf3e2' : '#eaf6ee';
@@ -75,7 +75,7 @@ function ProgressLineChart({ weeks }) {
   const pathD = coords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
 
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div className="pdf-avoid-break" style={{ marginBottom: 16 }}>
       <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>تطوّر الإتقان عبر الأسابيع</h3>
       <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ maxWidth: 640 }}>
         {[0, 25, 50, 75, 100].map((v) => {
@@ -203,7 +203,7 @@ export default function StudentReport({ schoolId, classId, teacherUid, className
       {reportData && (
         <div style={{ position: 'fixed', top: -99999, left: -99999 }}>
           <div ref={reportRef} style={{ width: 700, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
-            <div style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
+            <div className="pdf-avoid-break" style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
               <div style={{ fontSize: 13, color: '#666' }}>{reportData.schoolName}</div>
               <div style={{ fontSize: 13, color: '#666' }}>المادة: {reportData.subject || 'غير محددة'}</div>
               <div style={{ fontSize: 13, color: '#666' }}>من {reportData.fromWeekName} إلى {reportData.toWeekName}</div>
@@ -225,7 +225,7 @@ export default function StudentReport({ schoolId, classId, teacherUid, className
             <ProgressLineChart weeks={reportData.weeks} />
 
             {reportData.weeks.map((w) => (
-              <div key={w.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+              <div key={w.id} className="pdf-avoid-break" style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                 <h3 style={{ margin: '0 0 8px' }}>{w.name} — {w.typeLabel}</h3>
                 {w.enrichmentLink && (
                   <p style={{ fontSize: 12 }}>
