@@ -38,9 +38,10 @@ export async function getStudentAssessment(schoolId, skillId, studentId) {
   return snap.exists() ? snap.data() : null;
 }
 
-// يعيد حساب ملخص أسبوع كامل (عدد كل حالة) ويخزّنه جاهزًا على وثيقة الأسبوع نفسها،
-// عشان صفحات المتابعة (زي متابعة الرصد بلوحة الإدارة) تقرأ رقمًا جاهزًا بدل ما تحسبه من جديد كل مرة
-async function recomputeWeekSummary(schoolId, weekId) {
+// يعيد حساب ملخّص أسبوع كامل (عدد كل حالة) ويخزّنه جاهزًا على وثيقة الأسبوع نفسها،
+// عشان صفحات المتابعة (زي متابعة الرصد بلوحة الإدارة) تقرأ رقمًا جاهزًا بدل ما تحسبه من جديد كل مرة.
+// مصدَّرة عشان تُستدعى أيضًا من عمليات أخرى تغيّر التقييمات (زي حذف مهارة كاملة).
+export async function recomputeWeekSummary(schoolId, weekId) {
   try {
     const skills = await listSkillsForWeek(schoolId, weekId);
     const counts = { mastered: 0, needsSupport: 0, notMastered: 0, absent: 0 };
@@ -57,8 +58,8 @@ async function recomputeWeekSummary(schoolId, weekId) {
       summaryUpdatedAt: serverTimestamp(),
     });
   } catch (err) {
-    // فشل حساب الملخّص المخزَن لا يجب أن يوقف عملية الحفظ الأساسية للتقييم نفسه
-    console.error('تعذر تحديث ملخّص الأسبوع:', err);
+    // فشل حساب الملخّص المخزَّن لا يجب أن يوقف العملية الأساسية (حفظ تقييم أو حذف مهارة)
+    console.error('تعذّر تحديث ملخّص الأسبوع:', err);
   }
 }
 
