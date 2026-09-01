@@ -10,8 +10,7 @@ import {
 } from '../lib/classesApi';
 import { listSchoolTeachers } from '../lib/teachersApi';
 import { listClassStudents } from '../lib/studentsApi';
-import { listWeeksForClass } from '../lib/weeksApi';
-import { getLatestWeekSummary } from '../lib/overviewApi';
+import { getLatestWeekSummaryLight } from '../lib/overviewApi';
 import { listActionsForClass } from '../lib/actionEngine';
 import ClassDetail from './ClassDetail';
 import ClassReport from './ClassReport';
@@ -109,14 +108,12 @@ export default function AdminDashboard({ schoolId }) {
 
       const rows = await Promise.all(
         assignments.map(async (a) => {
-          const [weeks, summary, classActions] = await Promise.all([
-            listWeeksForClass(schoolId, a.classId, a.teacherUid),
-            getLatestWeekSummary(schoolId, a.classId, a.teacherUid),
+          const [summary, classActions] = await Promise.all([
+            getLatestWeekSummaryLight(schoolId, a.classId, a.teacherUid),
             listActionsForClass(schoolId, a.classId),
           ]);
 
-          const latestWeek = weeks[0] || null;
-          const daysAgo = latestWeek ? daysSince(latestWeek.createdAt) : null;
+          const daysAgo = summary ? daysSince(summary.createdAt) : null;
 
           let masteryPercent = null;
           if (summary) {
