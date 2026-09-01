@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { loginOwner, loginAdmin, loginTeacher, loginParent } from '../lib/auth';
 import { registerSchoolAdmin } from '../lib/schoolAdminApi';
 import { registerTeacher } from '../lib/teachersApi';
+import Logo from '../components/Logo';
+import Footer from '../components/Footer';
+import { colors, font, radius, spacing } from '../lib/theme';
 
 const TABS = [
   { key: 'admin', label: 'الإدارة' },
@@ -83,94 +86,103 @@ export default function Login() {
     }
   }
 
-  const inputStyle = { width: '100%', padding: 10, marginBottom: 10 };
-  const submitStyle = { width: '100%', padding: 12, background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 8 };
-  const linkStyle = { background: 'none', border: 'none', color: '#0b7a4b', textDecoration: 'underline' };
-  const linkStyleMuted = { background: 'none', border: 'none', color: '#666', textDecoration: 'underline' };
+  const inputStyle = { width: '100%', padding: 10, marginBottom: 10, borderRadius: radius.button, border: `1px solid ${colors.border}`, boxSizing: 'border-box' };
+  const submitStyle = { width: '100%', padding: 12, background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button };
+  const linkStyle = { background: 'none', border: 'none', color: colors.primary, textDecoration: 'underline' };
+  const linkStyleMuted = { background: 'none', border: 'none', color: colors.textMuted, textDecoration: 'underline' };
 
   return (
-    <div style={{ maxWidth: 420, margin: '40px auto', padding: 16 }} dir="rtl">
-      <h1 style={{ textAlign: 'center' }}>منجزي</h1>
-
-      {!ownerMode && !directParentLink && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => { setTab(t.key); resetMsgs(); setRegisterMode(false); }}
-              style={{
-                flex: 1, padding: 10, fontWeight: tab === t.key ? 'bold' : 'normal',
-                background: tab === t.key ? '#0b3d2e' : '#f2f2f2', color: tab === t.key ? '#fff' : '#000',
-                border: 'none', borderRadius: 8,
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
+    <div>
+      <div style={{ maxWidth: 420, margin: '40px auto 0', padding: spacing.lg }} dir="rtl">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: spacing.xl }}>
+          <Logo size="lg" />
+          <p style={{ fontFamily: font.family, fontSize: 13, color: colors.textMuted, marginTop: spacing.sm, marginBottom: 0 }}>
+            نظام متابعة الأداء الدراسي
+          </p>
         </div>
-      )}
 
-      {error && <div style={{ background: '#fdecea', color: '#a10000', padding: 10, borderRadius: 8, marginBottom: 12 }}>{error}</div>}
-      {successMsg && <div style={{ background: '#eaf6ee', color: '#0b5c33', padding: 10, borderRadius: 8, marginBottom: 12 }}>{successMsg}</div>}
+        {!ownerMode && !directParentLink && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: spacing.lg }}>
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => { setTab(t.key); resetMsgs(); setRegisterMode(false); }}
+                style={{
+                  flex: 1, padding: 10, fontWeight: tab === t.key ? 'bold' : 'normal',
+                  background: tab === t.key ? colors.ink : '#f2f2f2', color: tab === t.key ? '#fff' : '#000',
+                  border: 'none', borderRadius: radius.button, fontFamily: font.family,
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
 
-      {!ownerMode && (tab === 'admin' || tab === 'teacher') && !registerMode && (
-        <form onSubmit={handleStaffSubmit}>
-          <label>البريد الإلكتروني</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
-          <label>كلمة المرور</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
-          <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
-          <p style={{ textAlign: 'center', marginTop: 12 }}>
-            <button type="button" onClick={() => { setRegisterMode(true); resetMsgs(); }} style={linkStyle}>
-              {tab === 'admin' ? 'إنشاء حساب إدارة جديد' : 'إنشاء حساب معلّمة جديدة'}
-            </button>
-          </p>
-          {tab === 'admin' && (
-            <p style={{ textAlign: 'center', marginTop: 4 }}>
-              <button type="button" onClick={() => setOwnerMode(true)} style={linkStyleMuted}>يمكن لحساب Admin تسجيل الدخول من هنا أيضًا</button>
+        {error && <div style={{ background: colors.redTint, color: colors.red, padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{error}</div>}
+        {successMsg && <div style={{ background: colors.primaryTint, color: '#0b5c33', padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{successMsg}</div>}
+
+        {!ownerMode && (tab === 'admin' || tab === 'teacher') && !registerMode && (
+          <form onSubmit={handleStaffSubmit}>
+            <label>البريد الإلكتروني</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
+            <label>كلمة المرور</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
+            <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
+            <p style={{ textAlign: 'center', marginTop: spacing.md }}>
+              <button type="button" onClick={() => { setRegisterMode(true); resetMsgs(); }} style={linkStyle}>
+                {tab === 'admin' ? 'إنشاء حساب إدارة جديد' : 'إنشاء حساب معلّمة جديدة'}
+              </button>
             </p>
-          )}
-        </form>
-      )}
+            {tab === 'admin' && (
+              <p style={{ textAlign: 'center', marginTop: 4 }}>
+                <button type="button" onClick={() => setOwnerMode(true)} style={linkStyleMuted}>يمكن لحساب Admin تسجيل الدخول من هنا أيضًا</button>
+              </p>
+            )}
+          </form>
+        )}
 
-      {!ownerMode && (tab === 'admin' || tab === 'teacher') && registerMode && (
-        <form onSubmit={handleRegister}>
-          <label>رمز المدرسة</label>
-          <input type="text" value={schoolCode} onChange={(e) => setSchoolCode(e.target.value)} style={inputStyle} required />
-          <label>الاسم</label>
-          <input type="text" value={regName} onChange={(e) => setRegName(e.target.value)} style={inputStyle} />
-          <label>البريد الإلكتروني</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
-          <label>كلمة المرور</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required minLength={6} />
-          <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'إنشاء الحساب'}</button>
-          <p style={{ textAlign: 'center', marginTop: 12 }}>
-            <button type="button" onClick={() => { setRegisterMode(false); resetMsgs(); }} style={linkStyleMuted}>العودة إلى تسجيل الدخول</button>
-          </p>
-        </form>
-      )}
+        {!ownerMode && (tab === 'admin' || tab === 'teacher') && registerMode && (
+          <form onSubmit={handleRegister}>
+            <label>رمز المدرسة</label>
+            <input type="text" value={schoolCode} onChange={(e) => setSchoolCode(e.target.value)} style={inputStyle} required />
+            <label>الاسم</label>
+            <input type="text" value={regName} onChange={(e) => setRegName(e.target.value)} style={inputStyle} />
+            <label>البريد الإلكتروني</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
+            <label>كلمة المرور</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required minLength={6} />
+            <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'إنشاء الحساب'}</button>
+            <p style={{ textAlign: 'center', marginTop: spacing.md }}>
+              <button type="button" onClick={() => { setRegisterMode(false); resetMsgs(); }} style={linkStyleMuted}>العودة إلى تسجيل الدخول</button>
+            </p>
+          </form>
+        )}
 
-      {ownerMode && (
-        <form onSubmit={handleStaffSubmit}>
-          <label>البريد الإلكتروني</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
-          <label>كلمة المرور</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
-          <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
-          <p style={{ textAlign: 'center', marginTop: 12 }}>
-            <button type="button" onClick={() => setOwnerMode(false)} style={linkStyleMuted}>عودة</button>
-          </p>
-        </form>
-      )}
+        {ownerMode && (
+          <form onSubmit={handleStaffSubmit}>
+            <label>البريد الإلكتروني</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
+            <label>كلمة المرور</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
+            <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
+            <p style={{ textAlign: 'center', marginTop: spacing.md }}>
+              <button type="button" onClick={() => setOwnerMode(false)} style={linkStyleMuted}>عودة</button>
+            </p>
+          </form>
+        )}
 
-      {!ownerMode && tab === 'parent' && (
-        <form onSubmit={handleParentSubmit}>
-          <label>رقم السجل المدني (عشرة أرقام)</label>
-          <input type="text" inputMode="numeric" value={nationalId} onChange={(e) => setNationalId(e.target.value)} style={inputStyle} required autoFocus />
-          <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
-        </form>
-      )}
+        {!ownerMode && tab === 'parent' && (
+          <form onSubmit={handleParentSubmit}>
+            <label>رقم السجل المدني (عشرة أرقام)</label>
+            <input type="text" inputMode="numeric" value={nationalId} onChange={(e) => setNationalId(e.target.value)} style={inputStyle} required autoFocus />
+            <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
+          </form>
+        )}
+      </div>
+
+      <Footer />
     </div>
   );
 }
