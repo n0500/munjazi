@@ -38,6 +38,14 @@ const STATUS_KEYS = [
   { key: 'absent', label: 'غائبة' },
 ];
 
+const SINGLE_WEEK_PDF_OPTIONS = {
+  repeatHeaderSelector: '.pdf-repeat-header',
+  repeatTableHeaderSelector: '.pdf-repeat-table-head',
+};
+const RANGE_PDF_OPTIONS = {
+  repeatHeaderSelector: '.pdf-repeat-header',
+};
+
 export default function ClassReport({ schoolId, classId, teacherUid, className, subject, teacherName, onBack, defaultWeekName }) {
   const [weeks, setWeeks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -91,7 +99,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
       setRangeReport(null);
       if (download) {
         await new Promise((resolve) => setTimeout(resolve, 100));
-        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-${week.name}.pdf`, 'l');
+        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-${week.name}.pdf`, 'l', SINGLE_WEEK_PDF_OPTIONS);
       }
     } catch (err) {
       setError(err.message || 'تعذّر توليد التقرير.');
@@ -134,7 +142,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
         setRangeReport(data);
         setWeekReport(null);
         await new Promise((resolve) => setTimeout(resolve, 100));
-        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-ملخص.pdf`, 'l');
+        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-ملخص.pdf`, 'l', RANGE_PDF_OPTIONS);
       }
     } catch (err) {
       setError(err.message || 'تعذّر توليد التقرير.');
@@ -147,8 +155,11 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
     if (!reportRef.current) return;
     setGenerating(true);
     try {
-      const filename = weekReport ? `تقرير-فصل-${weekReport.weekName}.pdf` : `تقرير-فصل-ملخص.pdf`;
-      await exportElementToPdf(reportRef.current, filename, 'l');
+      if (weekReport) {
+        await exportElementToPdf(reportRef.current, `تقرير-فصل-${weekReport.weekName}.pdf`, 'l', SINGLE_WEEK_PDF_OPTIONS);
+      } else {
+        await exportElementToPdf(reportRef.current, `تقرير-فصل-ملخص.pdf`, 'l', RANGE_PDF_OPTIONS);
+      }
     } catch (err) {
       setError(err.message || 'تعذّر تحميل التقرير.');
     } finally {
@@ -218,11 +229,11 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
       </form>
 
       {(weekReport || rangeReport) && (
-        <div style={{ position: 'fixed', top: -99999, left: -99999 }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
           <div ref={reportRef} style={{ width: 1050, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
             {weekReport && (
               <>
-                <div className="pdf-avoid-break" style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
+                <div className="pdf-repeat-header" style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 20, background: '#fff' }}>
                   <div style={{ fontSize: 13, color: '#666' }}>{weekReport.schoolName}</div>
                   <div style={{ fontSize: 13, color: '#666' }}>المادة: {weekReport.subject || 'غير محددة'}</div>
                   <div style={{ fontSize: 13, color: '#666' }}>{weekReport.weekName} — {weekReport.weekTypeLabel}</div>
@@ -239,19 +250,19 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
                   ))}
                 </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
+                  <thead className="pdf-repeat-table-head" style={{ background: '#fff' }}>
                     <tr>
-                      <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الطالبة</th>
+                      <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>الطالبة</th>
                       {weekReport.skillTitles.map((t, i) => (
-                        <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>{t}</th>
+                        <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>{t}</th>
                       ))}
-                      <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>التوصية</th>
-                      <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الإجراء</th>
+                      <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>التوصية</th>
+                      <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>الإجراء</th>
                     </tr>
                   </thead>
                   <tbody>
                     {weekReport.rows.map((row, i) => (
-                      <tr key={i}>
+                      <tr key={i} className="pdf-avoid-break">
                         <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
                         {row.cells.map((c, j) => (
                           <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
@@ -274,7 +285,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
 
             {rangeReport && (
               <>
-                <div className="pdf-avoid-break" style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
+                <div className="pdf-repeat-header" style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 20, background: '#fff' }}>
                   <div style={{ fontSize: 13, color: '#666' }}>{rangeReport.schoolName}</div>
                   <div style={{ fontSize: 13, color: '#666' }}>المادة: {rangeReport.subject || 'غير محددة'}</div>
                   <div style={{ fontSize: 13, color: '#666' }}>من {rangeReport.fromWeekName} إلى {rangeReport.toWeekName}</div>
