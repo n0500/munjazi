@@ -28,6 +28,7 @@ async function activeActionsForStudent(schoolId, classId, studentId, teacherUid)
       typeLabel: a.type === 'remedial' ? 'علاجي' : 'إثرائي',
       affectedSkillTitles: a.affectedSkillTitles || [],
       text: a.finalText || a.suggestedText,
+      enrichmentLink: a.enrichmentLink || '',
       parentAcknowledgment: a.parentAcknowledgment || { viewedAt: null, viewedByParentId: null },
     }));
 }
@@ -37,7 +38,7 @@ export async function listSubjectsForStudentClass(schoolId, classId) {
   return assignments.filter((a) => a.active !== false);
 }
 
-// يجيب مهارات أسبوع معيّن + حالة طالبة فيه — يُستخدم لفلتر الأسبوع بلوحة ولي الأمر
+// يجيب مهارات أسبوع معيّن + حالة طالبة فيه — يستخدم لفلتر الأسبوع بلوحة ولي الأمر
 export async function buildSubjectWeekSkills(schoolId, { weekId, classId, studentId }) {
   const skills = await listSkillsForWeekAndClass(schoolId, weekId, classId);
   const skillRows = [];
@@ -84,6 +85,8 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
         typeLabel: act.type === 'remedial' ? 'علاجي' : 'إثرائي',
         affectedSkillTitles: act.affectedSkillTitles || [],
         text: act.finalText || act.suggestedText,
+        // الرابط الإثرائي الخاص بهذا الإجراء تحديدًا (وقت تفعيله)، منفصل عن رابط الأسبوع الحالي العام
+        enrichmentLink: act.enrichmentLink || '',
       }));
 
     const hasRemedial = subjectActions.some((x) => x.type === 'remedial');
