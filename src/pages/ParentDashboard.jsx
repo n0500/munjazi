@@ -234,6 +234,8 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
           const remedial = s.activeActions.find((a) => a.type === 'remedial');
           const enrichment = s.activeActions.find((a) => a.type === 'enrichment');
           const weakSkills = weakSkillsFor(s);
+          // رابط عام للأسبوع يُستخدم إن لم يوجد رابط خاص بإجراء إثرائي محدد
+          const fallbackLink = s.enrichmentLink;
 
           return (
             <div key={s.teacherUid} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, marginBottom: spacing.sm, overflow: 'hidden' }}>
@@ -280,6 +282,16 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                     <div style={{ background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: radius.button, padding: '6px 10px', fontSize: 11, marginBottom: spacing.sm }}>
                       <strong>⭐ إجراء إثرائي — {enrichment.affectedSkillTitles.join('، ')}</strong>
                       <div style={{ marginTop: 3 }}>{enrichment.text}</div>
+                      {enrichment.enrichmentLink && (
+                        <a
+                          href={enrichment.enrichmentLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ display: 'inline-block', marginTop: 6, color: '#0b5c33', fontWeight: 'bold', textDecoration: 'underline' }}
+                        >
+                          فتح رابط هذا النشاط الإثرائي
+                        </a>
+                      )}
                     </div>
                   )}
 
@@ -314,9 +326,9 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                     </div>
                   )}
 
-                  {s.enrichmentLink && (
+                  {!enrichment?.enrichmentLink && fallbackLink && (
                     <a
-                      href={s.enrichmentLink}
+                      href={fallbackLink}
                       target="_blank"
                       rel="noreferrer"
                       style={{ display: 'block', textAlign: 'center', background: colors.primary, color: '#fff', borderRadius: radius.button, padding: '10px', fontSize: 13, textDecoration: 'none' }}
