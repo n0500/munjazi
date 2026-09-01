@@ -38,8 +38,6 @@ const STATUS_KEYS = [
   { key: 'absent', label: 'غائبة' },
 ];
 
-// defaultWeekName: اسم أسبوع يُطلب توليد تقريره تلقائيًا فور فتح الصفحة (مثلاً من زر "تقرير" بلوحة الإدارة)،
-// مع بقاء النموذج كاملاً لتغيير الأسبوع أو نوع التقرير يدويًا بعد ذلك
 export default function ClassReport({ schoolId, classId, teacherUid, className, subject, teacherName, onBack, defaultWeekName }) {
   const [weeks, setWeeks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -224,7 +222,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
           <div ref={reportRef} style={{ width: 1050, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
             {weekReport && (
               <>
-                <div style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
+                <div className="pdf-avoid-break" style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
                   <div style={{ fontSize: 13, color: '#666' }}>{weekReport.schoolName}</div>
                   <div style={{ fontSize: 13, color: '#666' }}>المادة: {weekReport.subject || 'غير محددة'}</div>
                   <div style={{ fontSize: 13, color: '#666' }}>{weekReport.weekName} — {weekReport.weekTypeLabel}</div>
@@ -276,7 +274,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
 
             {rangeReport && (
               <>
-                <div style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
+                <div className="pdf-avoid-break" style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
                   <div style={{ fontSize: 13, color: '#666' }}>{rangeReport.schoolName}</div>
                   <div style={{ fontSize: 13, color: '#666' }}>المادة: {rangeReport.subject || 'غير محددة'}</div>
                   <div style={{ fontSize: 13, color: '#666' }}>من {rangeReport.fromWeekName} إلى {rangeReport.toWeekName}</div>
@@ -286,7 +284,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
                 {rangeReport.weeks.map((w, wIdx) => {
                   const isLastWeek = wIdx === rangeReport.weeks.length - 1;
                   return (
-                    <div key={w.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 14, breakInside: 'avoid' }}>
+                    <div key={w.id} className="pdf-avoid-break" style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 14 }}>
                       <h3 style={{ margin: '0 0 8px' }}>{w.name} — {w.typeLabel}</h3>
                       {w.enrichmentLink && (
                         <p style={{ fontSize: 12 }}>
