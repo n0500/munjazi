@@ -22,8 +22,8 @@ function SkillBadge({ status, statusLabel }) {
   );
 }
 
-// تصنيف رباعي دقيق لكل مادة، من الأخطر إلى الأفضل:
-// إجراء نشط (رسمي موثّق) > غير متقنة (حالة سلبية فعلية) > تحتاج دعمًا (حالة وسط) > ممتازة > لم تُرصد
+// تصنيف دقيق لكل مادة، من الأخطر إلى الأفضل:
+// إجراء نشط (رسمي موثّق) > غير متقنة > تحتاج دعمًا > ممتازة > غائبة بالكامل > غائبة جزئيًا > لم تُرصد
 function classifySubject(subject) {
   const hasActiveRemedial = subject.activeActions.some((a) => a.type === 'remedial');
   if (hasActiveRemedial) return 'activeAction';
@@ -38,23 +38,31 @@ function classifySubject(subject) {
 
   if (subject.totalSkills > 0 && subject.masteredCount === subject.totalSkills) return 'excellent';
 
+  const absentCount = subject.skillRows.filter((sk) => sk.status === 'absent').length;
+  if (absentCount === subject.skillRows.length) return 'absentOnly';
+  if (absentCount > 0) return 'partiallyAbsent';
+
   return 'notTracked';
 }
 
 // المواد بهذي الحالات تحتاج انتباهًا فوريًا، فتُفتح تلقائيًا بدون ضغط من ولي الأمر
-const AUTO_EXPAND_CLASSIFICATIONS = ['activeAction', 'notMastered'];
+const AUTO_EXPAND_CLASSIFICATIONS = ['activeAction', 'notMastered', 'absentOnly', 'partiallyAbsent'];
 
 const BADGE_CONFIG = {
   activeAction: { label: 'إجراء نشط', bg: colors.amberTint, text: colors.amber, border: colors.amberBorder },
   notMastered: { label: 'غير متقنة', bg: colors.redTint, text: colors.red, border: colors.redBorder },
   needsSupport: { label: 'تحتاج دعمًا', bg: '#fff7e0', text: '#8a6d00', border: '#d9b400' },
   excellent: { label: 'ممتازة', bg: colors.primaryTint, text: '#0b5c33', border: colors.primary },
-  notTracked: { label: 'لم تُرصد', bg: '#f2f2f2', text: colors.textMuted, border: colors.border },
+  absentOnly: { label: 'غائبة', bg: '#eef2f7', text: '#3d5a80', border: '#a9c0d9' },
+  partiallyAbsent: { label: 'غياب جزئي', bg: '#eef2f7', text: '#3d5a80', border: '#a9c0d9' },
 };
 
-// المهارات "غير متقنة" بآخر أسبوع رُصد لمادة معيّنة — تُستخدم للتركيز عليها عند الضغط على التنبيه
 function weakSkillsFor(subject) {
   return (subject.skillRows || []).filter((sk) => sk.status === 'notMastered');
+}
+
+function absentSkillsFor(subject) {
+  return (subject.skillRows || []).filter((sk) => sk.status === 'absent');
 }
 
 export default function ParentDashboard({ schoolId, profile, logout }) {
@@ -90,7 +98,8 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
           const classification = classifySubject(s);
           if (AUTO_EXPAND_CLASSIFICATIONS.includes(classification)) {
             autoExpand.add(s.teacherUid);
-            if (classification === 'notMastered') autoFocus[s.teacherUid] = true;
+            if (classification === 'notMastered') autoFocus[s.teacherUid] = 'weak';
+            else if (classification === 'absentOnly' || classification === 'partiallyAbsent') autoFocus[s.teacherUid] = 'absent';
           }
         });
         setExpandedSubjects(autoExpand);
@@ -124,35 +133,37 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
     );
   }
 
-  function toggleSubject(teacherUid, focus) {
+  function toggleSubject(teacherUid, focusMode) {
     setExpandedSubjects((prev) => {
       const next = new Set(prev);
-      if (next.has(teacherUid) && !focus) {
+      if (next.has(teacherUid) && !focusMode) {
         next.delete(teacherUid);
       } else {
         next.add(teacherUid);
       }
       return next;
     });
-    if (focus) {
-      setFocusMap((prev) => ({ ...prev, [teacherUid]: true }));
+    if (focusMode) {
+      setFocusMap((prev) => ({ ...prev, [teacherUid]: focusMode }));
     }
   }
 
   function clearFocus(teacherUid) {
-    setFocusMap((prev) => ({ ...prev, [teacherUid]: false }));
+    setFocusMap((prev) => ({ ...prev, [teacherUid]: null }));
   }
 
-  const subjectsWithClass = data.subjects.map((s) => ({ ...s, classification: classifySubject(s) }));
+  // المواد اللي ما رُصدت أصلاً (المعلمة ما أنشأت أسبوعًا بعد) لا تهم ولي الأمر، فلا تظهر إطلاقًا
+  const trackedSubjects = data.subjects
+    .map((s) => ({ ...s, classification: classifySubject(s) }))
+    .filter((s) => s.classification !== 'notTracked');
 
-  const activeActionCount = subjectsWithClass.filter((s) => s.classification === 'activeAction').length;
-  const notMasteredCount = subjectsWithClass.filter((s) => s.classification === 'notMastered').length;
-  const needsSupportCount = subjectsWithClass.filter((s) => s.classification === 'needsSupport').length;
-  const excellentCount = subjectsWithClass.filter((s) => s.classification === 'excellent').length;
+  const activeActionCount = trackedSubjects.filter((s) => s.classification === 'activeAction').length;
+  const notMasteredCount = trackedSubjects.filter((s) => s.classification === 'notMastered').length;
+  const needsSupportCount = trackedSubjects.filter((s) => s.classification === 'needsSupport').length;
+  const excellentCount = trackedSubjects.filter((s) => s.classification === 'excellent').length;
 
-  const filteredSubjects = subjectsWithClass.filter((s) => {
+  const filteredSubjects = trackedSubjects.filter((s) => {
     if (filter === 'needsAttention') return ['activeAction', 'notMastered', 'needsSupport'].includes(s.classification);
-    if (filter === 'notTracked') return s.classification === 'notTracked';
     return true;
   });
 
@@ -209,7 +220,6 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
         {[
           { key: 'all', label: 'الكل' },
           { key: 'needsAttention', label: 'تحتاج متابعة' },
-          { key: 'notTracked', label: 'لم تُرصد' },
         ].map((f) => (
           <button
             key={f.key}
@@ -230,18 +240,18 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
         filteredSubjects.map((s) => {
           const badge = BADGE_CONFIG[s.classification];
           const isExpanded = expandedSubjects.has(s.teacherUid);
-          const isFocused = !!focusMap[s.teacherUid];
+          const focusMode = focusMap[s.teacherUid] || null;
           const remedial = s.activeActions.find((a) => a.type === 'remedial');
           const enrichment = s.activeActions.find((a) => a.type === 'enrichment');
           const weakSkills = weakSkillsFor(s);
-          // رابط عام للأسبوع يُستخدم إن لم يوجد رابط خاص بإجراء إثرائي محدد
+          const absentSkills = absentSkillsFor(s);
           const fallbackLink = s.enrichmentLink;
 
           return (
             <div key={s.teacherUid} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, marginBottom: spacing.sm, overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'stretch' }}>
                 <button
-                  onClick={() => toggleSubject(s.teacherUid, false)}
+                  onClick={() => toggleSubject(s.teacherUid, null)}
                   style={{ flex: 1, background: '#fff', border: 'none', padding: spacing.md, display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'right' }}
                 >
                   <span style={{ background: badge.bg, color: badge.text, border: `1px solid ${badge.border}`, borderRadius: radius.pill, padding: '3px 10px', fontSize: 11, whiteSpace: 'nowrap' }}>
@@ -250,22 +260,35 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                   <div>
                     <div style={{ fontWeight: 'bold', fontSize: 14, fontFamily: font.family, color: colors.ink }}>{s.subject}</div>
                     <div style={{ fontSize: 11, color: colors.textMuted }}>
-                      {s.classification === 'notTracked' ? 'لا توجد بيانات بعد' : `${s.masteredCount} من ${s.totalSkills} متقنة`}
+                      {`${s.masteredCount} من ${s.totalSkills} متقنة`}
                     </div>
                   </div>
                 </button>
 
-                {weakSkills.length > 0 && (
-                  <button
-                    onClick={() => toggleSubject(s.teacherUid, true)}
-                    style={{
-                      background: colors.redTint, border: 'none', borderRight: `1px solid ${colors.border}`,
-                      padding: '0 14px', color: colors.red, fontSize: 12, fontWeight: 'bold', whiteSpace: 'nowrap',
-                    }}
-                  >
-                    ⚠ {weakSkills.length}
-                  </button>
-                )}
+                <div style={{ display: 'flex' }}>
+                  {weakSkills.length > 0 && (
+                    <button
+                      onClick={() => toggleSubject(s.teacherUid, 'weak')}
+                      style={{
+                        background: colors.redTint, border: 'none', borderRight: `1px solid ${colors.border}`,
+                        padding: '0 12px', color: colors.red, fontSize: 12, fontWeight: 'bold', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      ⚠ {weakSkills.length}
+                    </button>
+                  )}
+                  {absentSkills.length > 0 && (
+                    <button
+                      onClick={() => toggleSubject(s.teacherUid, 'absent')}
+                      style={{
+                        background: '#eef2f7', border: 'none', borderRight: `1px solid ${colors.border}`,
+                        padding: '0 12px', color: '#3d5a80', fontSize: 12, fontWeight: 'bold', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      ⭕ {absentSkills.length}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {isExpanded && (
@@ -295,7 +318,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                     </div>
                   )}
 
-                  {isFocused && weakSkills.length > 0 ? (
+                  {focusMode === 'weak' && weakSkills.length > 0 && (
                     <>
                       <p style={{ fontSize: 12, color: colors.red, fontWeight: 'bold', marginBottom: 6 }}>
                         مهارات غير متقنة بآخر أسبوع:
@@ -308,14 +331,32 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                           </div>
                         ))}
                       </div>
-                      <button
-                        onClick={() => clearFocus(s.teacherUid)}
-                        style={{ background: 'none', border: 'none', color: colors.primary, fontSize: 12, padding: 0, marginBottom: spacing.sm }}
-                      >
+                      <button onClick={() => clearFocus(s.teacherUid)} style={{ background: 'none', border: 'none', color: colors.primary, fontSize: 12, padding: 0, marginBottom: spacing.sm }}>
                         عرض كل المهارات
                       </button>
                     </>
-                  ) : (
+                  )}
+
+                  {focusMode === 'absent' && absentSkills.length > 0 && (
+                    <>
+                      <p style={{ fontSize: 12, color: '#3d5a80', fontWeight: 'bold', marginBottom: 6 }}>
+                        مهارات غائبة بآخر أسبوع:
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: spacing.sm }}>
+                        {absentSkills.map((sk, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+                            <SkillBadge status={sk.status} statusLabel={sk.statusLabel} />
+                            <span>{sk.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={() => clearFocus(s.teacherUid)} style={{ background: 'none', border: 'none', color: colors.primary, fontSize: 12, padding: 0, marginBottom: spacing.sm }}>
+                        عرض كل المهارات
+                      </button>
+                    </>
+                  )}
+
+                  {!focusMode && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: spacing.sm }}>
                       {(s.skillRows || []).map((sk, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
