@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { listSkillsForWeek, createSkill } from '../lib/skillsApi';
+import { listSkillsForWeek, createSkill, updateSkillTitle, deleteSkillWithAssessments } from '../lib/skillsApi';
 import { listAssessmentsForSkill, setAssessment, setAllMasteredForSkill } from '../lib/assessmentsApi';
 import { listClassStudents } from '../lib/studentsApi';
 import { updateWeek } from '../lib/weeksApi';
@@ -33,6 +33,11 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
   const [autoFilling, setAutoFilling] = useState(false);
   const [checkingActions, setCheckingActions] = useState(false);
   const [autoCheckNotice, setAutoCheckNotice] = useState(false);
+
+  const [editingSkillId, setEditingSkillId] = useState(null);
+  const [editSkillTitleValue, setEditSkillTitleValue] = useState('');
+  const [savingSkillTitle, setSavingSkillTitle] = useState(false);
+  const [deletingSkillId, setDeletingSkillId] = useState(null);
 
   const [editingLink, setEditingLink] = useState(false);
   const [linkDraft, setLinkDraft] = useState(week.enrichmentLink || '');
@@ -140,6 +145,42 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
       setError(err.message || 'تعذّر إضافة المهارة.');
     } finally {
       setAddingSkill(false);
+    }
+  }
+
+  function startEditSkill(skill) {
+    setEditingSkillId(skill.id);
+    setEditSkillTitleValue(skill.title);
+  }
+
+  async function handleSaveSkillTitle(skillId) {
+    setError('');
+    setSavingSkillTitle(true);
+    try {
+      await updateSkillTitle(schoolId, skillId, editSkillTitleValue);
+      setEditingSkillId(null);
+      await refresh();
+    } catch (err) {
+      setError(err.message || 'تعذّر تعديل اسم المهارة.');
+    } finally {
+      setSavingSkillTitle(false);
+    }
+  }
+
+  async function handleDeleteSkill(skill) {
+    const confirmed = window.confirm(
+      `متأكدة تبين تحذفين مهارة "${skill.title}"؟ سيتم حذف جميع التقييمات المسجَّلة عليها لكل الطالبات، ولا يمكن التراجع عن هذا الإجراء.`,
+    );
+    if (!confirmed) return;
+    setError('');
+    setDeletingSkillId(skill.id);
+    try {
+      await deleteSkillWithAssessments(schoolId, skill.id);
+      await refresh();
+    } catch (err) {
+      setError(err.message || 'تعذّر حذف المهارة.');
+    } finally {
+      setDeletingSkillId(null);
     }
   }
 
@@ -320,11 +361,45 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
               <tr>
                 <th style={{ padding: spacing.sm, textAlign: 'right', borderBottom: `2px solid ${colors.border}`, position: 'sticky', right: 0, background: '#fff' }}>الطالبة</th>
                 {skills.map((s) => (
-                  <th key={s.id} style={{ padding: spacing.sm, borderBottom: `2px solid ${colors.border}`, minWidth: 130 }}>
-                    <div>{s.title}</div>
-                    <button onClick={() => handleSetAllMastered(s.id)} style={{ marginTop: 4, padding: '2px 8px', fontSize: 11, background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: 6 }}>
-                      تعيين الكل: متقنة
-                    </button>
+                  <th key={s.id} style={{ padding: spacing.sm, borderBottom: `2px solid ${colors.border}`, minWidth: 150 }}>
+                    {editingSkillId === s.id ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <input
+                          type="text"
+                          value={editSkillTitleValue}
+                          onChange={(e) => setEditSkillTitleValue(e.target.value)}
+                          style={{ padding: 4, fontSize: 12, width: '100%', boxSizing: 'border-box' }}
+                          autoFocus
+                        />
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button onClick={() => handleSaveSkillTitle(s.id)} disabled={savingSkillTitle} style={{ flex: 1, padding: '2px 6px', fontSize: 11, background: colors.primary, color: '#fff', border: 'none', borderRadius: 6 }}>
+                            {savingSkillTitle ? '...' : 'حفظ'}
+                          </button>
+                          <button onClick={() => setEditingSkillId(null)} style={{ flex: 1, padding: '2px 6px', fontSize: 11, background: '#f2f2f2', border: 'none', borderRadius: 6 }}>
+                            إلغاء
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ fontWeight: 'normal' }}>{s.title}</div>
+                        <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                          <button onClick={() => handleSetAllMastered(s.id)} style={{ padding: '2px 6px', fontSize: 10, background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: 6 }}>
+                            تعيين الكل: متقنة
+                          </button>
+                          <button onClick={() => startEditSkill(s)} style={{ padding: '2px 6px', fontSize: 10, background: '#f2f2f2', border: 'none', borderRadius: 6 }}>
+                            تعديل
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSkill(s)}
+                            disabled={deletingSkillId === s.id}
+                            style={{ padding: '2px 6px', fontSize: 10, background: colors.redTint, border: `1px solid ${colors.redBorder}`, color: colors.red, borderRadius: 6 }}
+                          >
+                            {deletingSkillId === s.id ? '...' : 'حذف'}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </th>
                 ))}
                 <th style={{ padding: spacing.sm, borderBottom: `2px solid ${colors.border}`, minWidth: 200 }}>التوصية</th>
