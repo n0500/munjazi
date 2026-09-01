@@ -111,8 +111,10 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
 
   const subjectsWithClass = data.subjects.map((s) => ({ ...s, classification: classifySubject(s) }));
 
+  const activeActionCount = subjectsWithClass.filter((s) => s.classification === 'activeAction').length;
+  const notMasteredCount = subjectsWithClass.filter((s) => s.classification === 'notMastered').length;
+  const needsSupportCount = subjectsWithClass.filter((s) => s.classification === 'needsSupport').length;
   const excellentCount = subjectsWithClass.filter((s) => s.classification === 'excellent').length;
-  const needsAttentionCount = subjectsWithClass.filter((s) => ['activeAction', 'notMastered', 'needsSupport'].includes(s.classification)).length;
 
   const filteredSubjects = subjectsWithClass.filter((s) => {
     if (filter === 'needsAttention') return ['activeAction', 'notMastered', 'needsSupport'].includes(s.classification);
@@ -122,10 +124,19 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
 
   return (
     <div style={{ maxWidth: 480, margin: '0 auto', padding: spacing.lg }} dir="rtl">
-      <h1 style={{ fontSize: 20, margin: '16px 0 4px', fontFamily: font.family, color: colors.ink }}>مرحبًا</h1>
-      <p style={{ color: colors.textMuted, fontSize: 14, marginTop: 0, marginBottom: spacing.lg }}>
-        إليك ملخص متابعة {data.studentName} — {data.className}
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 16, marginBottom: 4 }}>
+        <div>
+          <h1 style={{ fontSize: 20, margin: 0, fontFamily: font.family, color: colors.ink }}>مرحبًا</h1>
+          <p style={{ color: colors.textMuted, fontSize: 14, marginTop: 4, marginBottom: 0 }}>
+            إليك ملخص متابعة {data.studentName} — {data.className}
+          </p>
+        </div>
+        <button onClick={logout} style={{ padding: '6px 14px', background: colors.red, color: '#fff', border: 'none', borderRadius: radius.button, fontSize: 12, whiteSpace: 'nowrap' }}>
+          تسجيل الخروج
+        </button>
+      </div>
+
+      <div style={{ height: spacing.lg }} />
 
       {data.priority && (
         <div style={{ background: colors.amberTint, border: `1px solid ${colors.amberBorder}`, color: colors.amber, borderRadius: radius.card, padding: spacing.md, marginBottom: spacing.lg }}>
@@ -136,18 +147,22 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: spacing.sm, marginBottom: spacing.xl }}>
-        <div style={{ flex: 1, textAlign: 'center', border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: '12px 4px' }}>
-          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.ink }}>{excellentCount}</div>
-          <div style={{ fontSize: 11, color: colors.textMuted }}>ممتازة</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.sm, marginBottom: spacing.xl }}>
+        <div style={{ textAlign: 'center', border: `1px solid ${colors.amberBorder}`, borderRadius: radius.card, padding: '12px 4px', background: colors.amberTint }}>
+          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.amber }}>{activeActionCount}</div>
+          <div style={{ fontSize: 11, color: colors.amber }}>إجراء نشط</div>
         </div>
-        <div style={{ flex: 1, textAlign: 'center', border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: '12px 4px' }}>
-          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.ink }}>{needsAttentionCount}</div>
-          <div style={{ fontSize: 11, color: colors.textMuted }}>تحتاج متابعة</div>
+        <div style={{ textAlign: 'center', border: `1px solid ${colors.redBorder}`, borderRadius: radius.card, padding: '12px 4px', background: colors.redTint }}>
+          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.red }}>{notMasteredCount}</div>
+          <div style={{ fontSize: 11, color: colors.red }}>غير متقنة</div>
         </div>
-        <div style={{ flex: 1, textAlign: 'center', border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: '12px 4px' }}>
-          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.ink }}>{data.counts.total}</div>
-          <div style={{ fontSize: 11, color: colors.textMuted }}>مواد مرصودة</div>
+        <div style={{ textAlign: 'center', border: '1px solid #d9b400', borderRadius: radius.card, padding: '12px 4px', background: '#fff7e0' }}>
+          <div style={{ fontSize: 20, fontWeight: 'bold', color: '#8a6d00' }}>{needsSupportCount}</div>
+          <div style={{ fontSize: 11, color: '#8a6d00' }}>تحتاج دعمًا</div>
+        </div>
+        <div style={{ textAlign: 'center', border: `1px solid ${colors.primary}`, borderRadius: radius.card, padding: '12px 4px', background: colors.primaryTint }}>
+          <div style={{ fontSize: 20, fontWeight: 'bold', color: '#0b5c33' }}>{excellentCount}</div>
+          <div style={{ fontSize: 11, color: '#0b5c33' }}>ممتازة</div>
         </div>
       </div>
 
