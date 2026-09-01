@@ -38,7 +38,9 @@ const STATUS_KEYS = [
   { key: 'absent', label: 'غائبة' },
 ];
 
-export default function ClassReport({ schoolId, classId, teacherUid, className, subject, teacherName, onBack }) {
+// defaultWeekName: اسم أسبوع يُطلب توليد تقريره تلقائيًا فور فتح الصفحة (مثلاً من زر "تقرير" بلوحة الإدارة)،
+// مع بقاء النموذج كاملاً لتغيير الأسبوع أو نوع التقرير يدويًا بعد ذلك
+export default function ClassReport({ schoolId, classId, teacherUid, className, subject, teacherName, onBack, defaultWeekName }) {
   const [weeks, setWeeks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -53,6 +55,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
   const [rangeReport, setRangeReport] = useState(null);
 
   const reportRef = useRef(null);
+  const autoGenerateTriedRef = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -69,6 +72,48 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
     })();
   }, [schoolId, classId, teacherUid]);
 
+  async function generateSingleWeekReport(targetWeekId, { download } = { download: true }) {
+    const week = weeks.find((w) => w.id === targetWeekId);
+    if (!week) return;
+    setGenerating(true);
+    setError('');
+    try {
+      const data = await buildClassWeekReportData(schoolId, {
+        classId,
+        teacherUid,
+        className,
+        subject,
+        teacherName,
+        weekId: targetWeekId,
+        weekName: week.name,
+        weekTypeLabel: week.type === 'remediation' ? 'معالجة' : 'قياس',
+        enrichmentLink: week.enrichmentLink || '',
+      });
+      setWeekReport(data);
+      setRangeReport(null);
+      if (download) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-${week.name}.pdf`, 'l');
+      }
+    } catch (err) {
+      setError(err.message || 'تعذّر توليد التقرير.');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // عند توفّر defaultWeekName وتحميل قائمة الأسابيع، نبني التقرير تلقائيًا مرة واحدة بدون تحميل PDF فوري
+  useEffect(() => {
+    if (loading || autoGenerateTriedRef.current || !defaultWeekName || weeks.length === 0) return;
+    const match = weeks.find((w) => w.name === defaultWeekName);
+    if (match) {
+      autoGenerateTriedRef.current = true;
+      setWeekId(match.id);
+      generateSingleWeekReport(match.id, { download: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, weeks, defaultWeekName]);
+
   async function handleGenerate(e) {
     e.preventDefault();
     setError('');
@@ -76,22 +121,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
     try {
       if (mode === 'single') {
         if (!weekId) { setGenerating(false); return; }
-        const week = weeks.find((w) => w.id === weekId);
-        const data = await buildClassWeekReportData(schoolId, {
-          classId,
-          teacherUid,
-          className,
-          subject,
-          teacherName,
-          weekId,
-          weekName: week.name,
-          weekTypeLabel: week.type === 'remediation' ? 'معالجة' : 'قياس',
-          enrichmentLink: week.enrichmentLink || '',
-        });
-        setWeekReport(data);
-        setRangeReport(null);
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        if (reportRef.current) await exportElementToPdf(reportRef.current, `تقرير-فصل-${week.name}.pdf`, 'l');
+        await generateSingleWeekReport(weekId, { download: true });
       } else {
         if (!fromWeekId || !toWeekId) { setGenerating(false); return; }
         const data = await buildClassRangeReportData(schoolId, {
@@ -115,6 +145,19 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
     }
   }
 
+  async function handleDownloadCurrent() {
+    if (!reportRef.current) return;
+    setGenerating(true);
+    try {
+      const filename = weekReport ? `تقرير-فصل-${weekReport.weekName}.pdf` : `تقرير-فصل-ملخص.pdf`;
+      await exportElementToPdf(reportRef.current, filename, 'l');
+    } catch (err) {
+      setError(err.message || 'تعذّر تحميل التقرير.');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
   return (
@@ -125,6 +168,15 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
       <h1 style={{ fontFamily: font.family, color: colors.ink }}>تقرير الفصل</h1>
 
       {error && <div style={{ background: colors.redTint, color: colors.red, padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{error}</div>}
+
+      {weekReport && (
+        <div style={{ background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: radius.button, padding: spacing.sm, marginBottom: spacing.md, fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <span>✓ تقرير {weekReport.weekName} معروض أدناه — عدّلي الأسبوع بالنموذج لو أردتِ فترة مختلفة.</span>
+          <button onClick={handleDownloadCurrent} disabled={generating} style={{ padding: '6px 14px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button, fontSize: 12, whiteSpace: 'nowrap' }}>
+            {generating ? '...' : 'تحميل PDF'}
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleGenerate} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.lg }}>
         <label>نوع التقرير</label>
