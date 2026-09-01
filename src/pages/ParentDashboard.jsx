@@ -22,13 +22,34 @@ function SkillBadge({ status, statusLabel }) {
   );
 }
 
-function statusChip(statusKey) {
-  if (statusKey === 'needsAttention') return { label: 'تحتاج متابعة', bg: colors.amberTint, text: colors.amber, border: colors.amberBorder };
-  if (statusKey === 'notTracked') return { label: 'لم تُرصد', bg: '#f2f2f2', text: colors.textMuted, border: colors.border };
-  return { label: 'مستقرة', bg: colors.primaryTint, text: '#0b5c33', border: colors.primary };
+// تصنيف رباعي دقيق لكل مادة، من الأخطر إلى الأفضل:
+// إجراء نشط (رسمي موثّق) > غير متقنة (حالة سلبية فعلية) > تحتاج دعمًا (حالة وسط) > ممتازة > لم تُرصد
+function classifySubject(subject) {
+  const hasActiveRemedial = subject.activeActions.some((a) => a.type === 'remedial');
+  if (hasActiveRemedial) return 'activeAction';
+
+  if (!subject.skillRows || subject.skillRows.length === 0) return 'notTracked';
+
+  const hasNotMastered = subject.skillRows.some((sk) => sk.status === 'notMastered');
+  if (hasNotMastered) return 'notMastered';
+
+  const hasNeedsSupport = subject.skillRows.some((sk) => sk.status === 'needsSupport');
+  if (hasNeedsSupport) return 'needsSupport';
+
+  if (subject.totalSkills > 0 && subject.masteredCount === subject.totalSkills) return 'excellent';
+
+  return 'notTracked';
 }
 
-// يجيب المهارات "غير متقنة" بآخر أسبوع رُصد لمادة معينة، مباشرة من البيانات المحمّلة أصلاً
+const BADGE_CONFIG = {
+  activeAction: { label: 'إجراء نشط', bg: colors.amberTint, text: colors.amber, border: colors.amberBorder },
+  notMastered: { label: 'غير متقنة', bg: colors.redTint, text: colors.red, border: colors.redBorder },
+  needsSupport: { label: 'تحتاج دعمًا', bg: '#fff7e0', text: '#8a6d00', border: '#d9b400' },
+  excellent: { label: 'ممتازة', bg: colors.primaryTint, text: '#0b5c33', border: colors.primary },
+  notTracked: { label: 'لم تُرصد', bg: '#f2f2f2', text: colors.textMuted, border: colors.border },
+};
+
+// المهارات "غير متقنة" بآخر أسبوع رُصد لمادة معيّنة — تُستخدم للتركيز عليها عند الضغط على التنبيه
 function weakSkillsFor(subject) {
   return (subject.skillRows || []).filter((sk) => sk.status === 'notMastered');
 }
@@ -88,9 +109,14 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
     );
   }
 
-  const filteredSubjects = data.subjects.filter((s) => {
-    if (filter === 'needsAttention') return s.statusKey === 'needsAttention';
-    if (filter === 'notTracked') return s.statusKey === 'notTracked';
+  const subjectsWithClass = data.subjects.map((s) => ({ ...s, classification: classifySubject(s) }));
+
+  const excellentCount = subjectsWithClass.filter((s) => s.classification === 'excellent').length;
+  const needsAttentionCount = subjectsWithClass.filter((s) => ['activeAction', 'notMastered', 'needsSupport'].includes(s.classification)).length;
+
+  const filteredSubjects = subjectsWithClass.filter((s) => {
+    if (filter === 'needsAttention') return ['activeAction', 'notMastered', 'needsSupport'].includes(s.classification);
+    if (filter === 'notTracked') return s.classification === 'notTracked';
     return true;
   });
 
@@ -112,12 +138,12 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
 
       <div style={{ display: 'flex', gap: spacing.sm, marginBottom: spacing.xl }}>
         <div style={{ flex: 1, textAlign: 'center', border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: '12px 4px' }}>
-          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.ink }}>{data.counts.needsAttention}</div>
-          <div style={{ fontSize: 11, color: colors.textMuted }}>تحتاج متابعة</div>
+          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.ink }}>{excellentCount}</div>
+          <div style={{ fontSize: 11, color: colors.textMuted }}>ممتازة</div>
         </div>
         <div style={{ flex: 1, textAlign: 'center', border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: '12px 4px' }}>
-          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.ink }}>{data.counts.stable}</div>
-          <div style={{ fontSize: 11, color: colors.textMuted }}>مستقرة</div>
+          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.ink }}>{needsAttentionCount}</div>
+          <div style={{ fontSize: 11, color: colors.textMuted }}>تحتاج متابعة</div>
         </div>
         <div style={{ flex: 1, textAlign: 'center', border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: '12px 4px' }}>
           <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.ink }}>{data.counts.total}</div>
@@ -153,7 +179,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
         <p style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center', marginTop: 20 }}>لا توجد مواد تطابق هذا الفلتر.</p>
       ) : (
         filteredSubjects.map((s) => {
-          const chip = statusChip(s.statusKey);
+          const badge = BADGE_CONFIG[s.classification];
           const isExpanded = expandedSubject === s.teacherUid;
           const remedial = s.activeActions.find((a) => a.type === 'remedial');
           const enrichment = s.activeActions.find((a) => a.type === 'enrichment');
@@ -166,13 +192,13 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                   onClick={() => { setExpandedSubject(isExpanded && !focusOnWeakSkills ? null : s.teacherUid); setFocusOnWeakSkills(false); }}
                   style={{ flex: 1, background: '#fff', border: 'none', padding: spacing.md, display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'right' }}
                 >
-                  <span style={{ background: chip.bg, color: chip.text, border: `1px solid ${chip.border}`, borderRadius: radius.pill, padding: '3px 10px', fontSize: 11, whiteSpace: 'nowrap' }}>
-                    {chip.label}
+                  <span style={{ background: badge.bg, color: badge.text, border: `1px solid ${badge.border}`, borderRadius: radius.pill, padding: '3px 10px', fontSize: 11, whiteSpace: 'nowrap' }}>
+                    {badge.label}
                   </span>
                   <div>
                     <div style={{ fontWeight: 'bold', fontSize: 14, fontFamily: font.family, color: colors.ink }}>{s.subject}</div>
                     <div style={{ fontSize: 11, color: colors.textMuted }}>
-                      {s.statusKey === 'notTracked' ? 'لا توجد بيانات بعد' : `${s.masteredCount} من ${s.totalSkills} متقنة`}
+                      {s.classification === 'notTracked' ? 'لا توجد بيانات بعد' : `${s.masteredCount} من ${s.totalSkills} متقنة`}
                     </div>
                   </div>
                 </button>
@@ -210,7 +236,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                   {focusOnWeakSkills && weakSkills.length > 0 ? (
                     <>
                       <p style={{ fontSize: 12, color: colors.red, fontWeight: 'bold', marginBottom: 6 }}>
-                        مهارات تحتاج مزيدًا من الدعم بآخر أسبوع:
+                        مهارات غير متقنة بآخر أسبوع:
                       </p>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: spacing.sm }}>
                         {weakSkills.map((sk, i) => (
