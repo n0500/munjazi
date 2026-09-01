@@ -8,7 +8,7 @@ import {
   listClassAssignments,
   removeAssignment,
 } from '../lib/classesApi';
-import { listSchoolTeachers, setTeacherDisabled } from '../lib/teachersApi';
+import { listSchoolTeachers } from '../lib/teachersApi';
 import { listClassStudents } from '../lib/studentsApi';
 import { listWeeksForClass } from '../lib/weeksApi';
 import { getLatestWeekSummary } from '../lib/overviewApi';
@@ -59,9 +59,6 @@ export default function AdminDashboard({ schoolId }) {
   const [assignTeacherUid, setAssignTeacherUid] = useState('');
   const [assignSubject, setAssignSubject] = useState('');
   const [assigning, setAssigning] = useState(false);
-
-  const [togglingTeacherUid, setTogglingTeacherUid] = useState(null);
-  const [confirmDisableUid, setConfirmDisableUid] = useState(null);
 
   const [trackingRows, setTrackingRows] = useState(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
@@ -258,30 +255,6 @@ export default function AdminDashboard({ schoolId }) {
     return assignments.filter((a) => a.teacherUid === teacherUid).length;
   }
 
-  function handleToggleTeacherClick(teacher) {
-    const willDisable = !teacher.disabled;
-    const hasAssignments = assignedClassesCountFor(teacher.uid) > 0;
-    if (willDisable && hasAssignments) {
-      setConfirmDisableUid(teacher.uid);
-      return;
-    }
-    performToggleTeacher(teacher);
-  }
-
-  async function performToggleTeacher(teacher) {
-    setError('');
-    setConfirmDisableUid(null);
-    setTogglingTeacherUid(teacher.uid);
-    try {
-      await setTeacherDisabled(teacher.uid, !teacher.disabled);
-      await refresh();
-    } catch (err) {
-      setError(err.message || 'تعذّر تحديث حالة حساب المعلّمة.');
-    } finally {
-      setTogglingTeacherUid(null);
-    }
-  }
-
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
   if (selectedClassId) {
@@ -312,8 +285,6 @@ export default function AdminDashboard({ schoolId }) {
 
   const activeClasses = classes.filter((c) => !c.archived);
   const archivedClasses = classes.filter((c) => c.archived);
-  const activeTeachers = teachers.filter((t) => !t.disabled);
-  const disabledTeachers = teachers.filter((t) => t.disabled);
   const totalStudents = Object.values(studentCounts).reduce((sum, n) => sum + n, 0);
 
   const staleCount = trackingRows ? trackingRows.filter((r) => r.daysAgo === null || r.daysAgo > 7).length : 0;
@@ -372,9 +343,8 @@ export default function AdminDashboard({ schoolId }) {
               <div style={{ fontSize: 12, color: colors.textMuted }}>طالبة إجمالًا</div>
             </div>
             <div style={{ flex: '1 1 140px', border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.md, textAlign: 'center' }}>
-              <div style={{ fontSize: 22, fontWeight: 'bold', color: colors.ink }}>{activeTeachers.length}</div>
-              <div style={{ fontSize: 12, color: colors.textMuted }}>معلّمة نشطة</div>
-              {disabledTeachers.length > 0 && <div style={{ fontSize: 11, color: colors.textMuted }}>({disabledTeachers.length} معطّلة)</div>}
+              <div style={{ fontSize: 22, fontWeight: 'bold', color: colors.ink }}>{teachers.length}</div>
+              <div style={{ fontSize: 12, color: colors.textMuted }}>معلّمة مسجَّلة</div>
             </div>
           </div>
         </>
@@ -452,44 +422,10 @@ export default function AdminDashboard({ schoolId }) {
               const assignedCount = assignedClassesCountFor(t.uid);
               return (
                 <div key={t.uid} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.md, marginBottom: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                    <div>
-                      <div style={{ fontWeight: 'bold', fontFamily: font.family }}>
-                        {t.displayName} {t.disabled && <em style={{ color: colors.red, fontWeight: 'normal' }}>(معطّلة)</em>}
-                      </div>
-                      <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                        {assignedCount > 0 ? `مسندة إلى ${assignedCount} فصل` : 'غير مسندة إلى أي فصل حاليًا'}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleToggleTeacherClick(t)}
-                      disabled={togglingTeacherUid === t.uid}
-                      style={{
-                        padding: '6px 14px',
-                        background: t.disabled ? colors.primary : colors.red,
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: radius.button,
-                        fontSize: 13,
-                      }}
-                    >
-                      {togglingTeacherUid === t.uid ? '...' : t.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب'}
-                    </button>
+                  <div style={{ fontWeight: 'bold', fontFamily: font.family }}>{t.displayName}</div>
+                  <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                    {assignedCount > 0 ? `مسندة إلى ${assignedCount} فصل` : 'غير مسندة إلى أي فصل حاليًا'}
                   </div>
-
-                  {confirmDisableUid === t.uid && (
-                    <div style={{ marginTop: spacing.sm, background: colors.amberTint, border: `1px solid ${colors.amberBorder}`, borderRadius: radius.button, padding: spacing.sm, fontSize: 13, color: colors.amber }}>
-                      هذه المعلّمة مسندة حاليًا إلى {assignedCount} {assignedCount === 1 ? 'فصل' : 'فصول'}. يُرجى التأكد من نقل الإسناد إلى معلّمة أخرى إن دعت الحاجة قبل المتابعة.
-                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                        <button onClick={() => performToggleTeacher(t)} style={{ padding: '5px 12px', background: colors.red, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12 }}>
-                          تعطيل الحساب مع ذلك
-                        </button>
-                        <button onClick={() => setConfirmDisableUid(null)} style={{ padding: '5px 12px', background: '#fff', border: `1px solid ${colors.border}`, borderRadius: 6, fontSize: 12 }}>
-                          إلغاء
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })
