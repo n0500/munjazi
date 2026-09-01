@@ -4,7 +4,6 @@ import OwnerDashboard from './pages/OwnerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import ParentDashboard from './pages/ParentDashboard';
-import Footer from './components/Footer';
 import Logo from './components/Logo';
 import { colors } from './lib/theme';
 
@@ -45,7 +44,6 @@ function AppInner() {
       <div>
         <TopBar logout={logout} />
         <OwnerDashboard />
-        <Footer />
       </div>
     );
   }
@@ -55,7 +53,6 @@ function AppInner() {
       <div>
         <TopBar logout={logout} />
         <AdminDashboard schoolId={profile.schoolId} />
-        <Footer />
       </div>
     );
   }
@@ -65,7 +62,6 @@ function AppInner() {
       <div>
         <TopBar logout={logout} />
         <TeacherDashboard schoolId={profile.schoolId} teacherUid={firebaseUser.uid} teacherName={profile.displayName} />
-        <Footer />
       </div>
     );
   }
@@ -73,7 +69,6 @@ function AppInner() {
   return (
     <div>
       <ParentDashboard schoolId={profile.schoolId} profile={profile} logout={logout} />
-      <Footer />
     </div>
   );
 }
