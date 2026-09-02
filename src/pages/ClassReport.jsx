@@ -83,8 +83,10 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
     })();
   }, [schoolId, classId, teacherUid]);
 
+  // مسمى التقرير يتضمّن اسم الفصل صراحة: "تقرير قياس المهارات للصف X" أو "تقرير معالجة المهارات للصف X"
   function reportTypeLabelFor(data) {
-    return data.weekTypeLabel === 'قياس' ? 'تقرير قياس مهارات' : 'تقرير معالجة مهارات';
+    const base = data.weekTypeLabel === 'قياس' ? 'تقرير قياس المهارات' : 'تقرير معالجة المهارات';
+    return `${base} للصف ${data.className}`;
   }
 
   async function downloadWeekReportPdf(data) {
