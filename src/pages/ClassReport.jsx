@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { pdf } from '@react-pdf/renderer';
 import { listWeeksForClass } from '../lib/weeksApi';
 import { buildClassWeekReportData, buildClassRangeReportData } from '../lib/reportsApi';
-import { exportElementToPdf, exportReportWithTemplate } from '../lib/pdfExport';
+import { exportElementToPdf } from '../lib/pdfExport';
 import { STATUS_ICONS, STATUS_COLORS } from '../lib/recommendationsApi';
 import { colors, font, radius, spacing } from '../lib/theme';
+import ClassWeekReportDocument from './ClassWeekReportDocument';
 
 function StatusBadge({ status, statusLabel }) {
   if (!status) return <span>{statusLabel}</span>;
@@ -38,14 +40,16 @@ const STATUS_KEYS = [
   { key: 'absent', label: 'غائبة' },
 ];
 
-// مناطق القالب العرضي (Landscape) بالمليمتر — متفقة مع تصميم القالب المرفوع
-const LANDSCAPE_ZONES = {
-  headerTop: 18,
-  contentTop: 34,
-  contentBottom: 185,
-  footerTop: 187,
-  marginX: 15,
-};
+async function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 export default function ClassReport({ schoolId, classId, teacherUid, className, subject, teacherName, onBack, defaultWeekName }) {
   const [weeks, setWeeks] = useState([]);
@@ -62,9 +66,6 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
   const [rangeReport, setRangeReport] = useState(null);
 
   const rangeReportRef = useRef(null);
-  const weekHeaderRef = useRef(null);
-  const weekBodyRef = useRef(null);
-  const weekFooterRef = useRef(null);
   const autoGenerateTriedRef = useRef(false);
 
   useEffect(() => {
@@ -82,17 +83,15 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
     })();
   }, [schoolId, classId, teacherUid]);
 
-  async function downloadWeekReportPdf(weekName) {
-    if (!weekHeaderRef.current || !weekBodyRef.current) return;
-    await exportReportWithTemplate({
-      templateSrc: 'templates/report-landscape.png',
-      headerEl: weekHeaderRef.current,
-      bodyEl: weekBodyRef.current,
-      footerEl: weekFooterRef.current,
-      orientation: 'l',
-      filename: `تقرير-فصل-${weekName}.pdf`,
-      zones: LANDSCAPE_ZONES,
-    });
+  function reportTypeLabelFor(data) {
+    return data.weekTypeLabel === 'قياس' ? 'تقرير قياس مهارات' : 'تقرير معالجة مهارات';
+  }
+
+  async function downloadWeekReportPdf(data) {
+    const blob = await pdf(
+      <ClassWeekReportDocument data={data} reportTypeLabel={reportTypeLabelFor(data)} />,
+    ).toBlob();
+    await downloadBlob(blob, `تقرير-فصل-${data.weekName}.pdf`);
   }
 
   async function generateSingleWeekReport(targetWeekId, { download } = { download: true }) {
@@ -115,8 +114,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
       setWeekReport(data);
       setRangeReport(null);
       if (download) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        await downloadWeekReportPdf(week.name);
+        await downloadWeekReportPdf(data);
       }
     } catch (err) {
       setError(err.message || 'تعذّر توليد التقرير.');
@@ -125,7 +123,6 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
     }
   }
 
-  // عند توفّر defaultWeekName وتحميل قائمة الأسابيع، نبني التقرير تلقائيًا مرة واحدة بدون تحميل PDF فوري
   useEffect(() => {
     if (loading || autoGenerateTriedRef.current || !defaultWeekName || weeks.length === 0) return;
     const match = weeks.find((w) => w.name === defaultWeekName);
@@ -172,7 +169,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
     setGenerating(true);
     try {
       if (weekReport) {
-        await downloadWeekReportPdf(weekReport.weekName);
+        await downloadWeekReportPdf(weekReport);
       } else if (rangeReportRef.current) {
         await exportElementToPdf(rangeReportRef.current, `تقرير-فصل-ملخص.pdf`, 'l');
       }
@@ -185,10 +182,6 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
 
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
-  const reportTypeLabel = weekReport
-    ? (weekReport.weekTypeLabel === 'قياس' ? 'تقرير قياس مهارات' : 'تقرير معالجة مهارات')
-    : '';
-
   return (
     <div style={{ maxWidth: 600, margin: '20px auto', padding: spacing.lg }} dir="rtl">
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.primary, marginBottom: spacing.sm }}>
@@ -200,7 +193,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
 
       {weekReport && (
         <div style={{ background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: radius.button, padding: spacing.sm, marginBottom: spacing.md, fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-          <span>✓ تقرير {weekReport.weekName} معروض أدناه — عدّلي الأسبوع بالنموذج لو أردتِ فترة مختلفة.</span>
+          <span>✓ تقرير {weekReport.weekName} جاهز — عدّلي الأسبوع بالنموذج لو أردتِ فترة مختلفة.</span>
           <button onClick={handleDownloadCurrent} disabled={generating} style={{ padding: '6px 14px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button, fontSize: 12, whiteSpace: 'nowrap' }}>
             {generating ? '...' : 'تحميل PDF'}
           </button>
@@ -247,67 +240,6 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
           {generating ? '...جارٍ التوليد' : 'توليد التقرير وتحميله'}
         </button>
       </form>
-
-      {weekReport && (
-        <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
-          {/* الهيدر: اسم المدرسة + المادة + الأسبوع فقط — يُلتقط مرة واحدة ويتكرر بنفس الموضع بكل صفحة */}
-          <div ref={weekHeaderRef} style={{ width: 1000, padding: '4px 0', fontFamily: 'sans-serif', textAlign: 'center' }} dir="rtl">
-            <div style={{ fontSize: 26, fontWeight: 'bold', color: '#14261e' }}>{weekReport.schoolName}</div>
-            <div style={{ fontSize: 16, color: '#555', marginTop: 8 }}>المادة: {weekReport.subject || 'غير محددة'}</div>
-            <div style={{ fontSize: 16, color: '#555', marginTop: 6 }}>{weekReport.weekName}</div>
-          </div>
-
-          {/* الفوتر: اسم المديرة والمعلمة — يُلتقط مرة واحدة ويتكرر بنفس الموضع بكل صفحة */}
-          <div ref={weekFooterRef} style={{ width: 1000, padding: '4px 0', fontFamily: 'sans-serif' }} dir="rtl">
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#333' }}>
-              <span>مديرة المدرسة: {weekReport.principalName || '—'}</span>
-              <span>المعلّمة: {weekReport.teacherName}</span>
-            </div>
-          </div>
-
-          {/* المحتوى: مسمى التقرير + الجدول — يُقسَّم بين الصفحات حسب الحاجة */}
-          <div ref={weekBodyRef} style={{ width: 1000, fontFamily: 'sans-serif' }} dir="rtl">
-            <div className="pdf-avoid-break" style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ fontSize: 22, fontWeight: 'bold', color: colors.primary }}>{reportTypeLabel}</div>
-              {weekReport.enrichmentLink && (
-                <p style={{ fontSize: 12, marginTop: 6 }}>
-                  الرابط الإثرائي: <a href={weekReport.enrichmentLink} target="_blank" rel="noreferrer">{weekReport.enrichmentLink}</a>
-                </p>
-              )}
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 8, fontSize: 13 }}>
-                {STATUS_KEYS.map((s) => (
-                  <span key={s.key}>{s.label}: {weekReport.classCounts[s.key]}</span>
-                ))}
-              </div>
-            </div>
-
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الطالبة</th>
-                  {weekReport.skillTitles.map((t, i) => (
-                    <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>{t}</th>
-                  ))}
-                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>التوصية</th>
-                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الإجراء</th>
-                </tr>
-              </thead>
-              <tbody>
-                {weekReport.rows.map((row, i) => (
-                  <tr key={i} className="pdf-avoid-break">
-                    <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
-                    {row.cells.map((c, j) => (
-                      <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
-                    ))}
-                    <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.recommendation}</td>
-                    <td style={{ padding: 4, borderBottom: '1px solid #eee' }}><ActionsCell actions={row.activeActions} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {rangeReport && (
         <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
