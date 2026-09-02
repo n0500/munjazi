@@ -69,26 +69,21 @@ export async function exportElementToPdf(element, filename, orientation = 'p') {
   pdf.save(filename);
 }
 
-function loadImageAsDataUrl(src) {
+function loadImageElement(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext('2d').drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
-    };
+    img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = src;
   });
 }
 
 // تصدير تقرير باستخدام قالب خلفية جاهز (شعار وحدود ثابتة)، مع رسم الهيدر والفوتر
-// كصورتين مستقلتين تُلتقطان مرة واحدة بس (بعكس محاولات سابقة كانت تقتطعهما من صورة
-// مشتركة مع المحتوى، وهذا كان مصدر كل مشاكل التراكب) — كل صفحة تُبنى بنفس التركيب
-// بالضبط: قالب الخلفية + الهيدر (ثابت الموضع) + شريحة من المحتوى + الفوتر (ثابت الموضع).
+// كصورتين مستقلتين تُلتقطان مرة واحدة بس. نحوّل كل صورة لعنصر <img> محمَّل فعليًا
+// (بدل تمرير نص base64 مباشرة) ونعيد استخدام نفس العنصر بكل صفحة — هذا يتفادى خللًا
+// معروفًا بمتصفح Safari/iOS عند إعادة استخدام نفس نص base64 لصورة صغيرة عدة مرات
+// بمستند PDF واحد عبر jsPDF.
 export async function exportReportWithTemplate({
   templateSrc,
   headerEl,
@@ -100,26 +95,26 @@ export async function exportReportWithTemplate({
 }) {
   const { headerTop, contentTop, contentBottom, footerTop, marginX } = zones;
 
-  const templateImgData = await loadImageAsDataUrl(templateSrc);
+  const templateImg = await loadImageElement(templateSrc);
 
-  const headerCanvas = await html2canvas(headerEl, { scale: 2, useCORS: true, backgroundColor: null });
+  const headerCanvas = await html2canvas(headerEl, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
   const footerCanvas = footerEl
-    ? await html2canvas(footerEl, { scale: 2, useCORS: true, backgroundColor: null })
+    ? await html2canvas(footerEl, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
     : null;
   const bodyCanvas = await html2canvas(bodyEl, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+
+  const headerImg = await loadImageElement(headerCanvas.toDataURL('image/png'));
+  const footerImg = footerCanvas ? await loadImageElement(footerCanvas.toDataURL('image/png')) : null;
 
   const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const contentWidthMm = pageWidth - marginX * 2;
 
-  const headerImgData = headerCanvas.toDataURL('image/png');
   const headerHeightMm = (headerCanvas.height * contentWidthMm) / headerCanvas.width;
 
-  let footerImgData = null;
   let footerHeightMm = 0;
   if (footerCanvas) {
-    footerImgData = footerCanvas.toDataURL('image/png');
     footerHeightMm = (footerCanvas.height * contentWidthMm) / footerCanvas.width;
   }
 
@@ -139,10 +134,10 @@ export async function exportReportWithTemplate({
   const contentZoneHeightMm = contentBottom - contentTop;
 
   function drawStaticLayer() {
-    pdf.addImage(templateImgData, 'PNG', 0, 0, pageWidth, pageHeight);
-    pdf.addImage(headerImgData, 'PNG', marginX, headerTop, contentWidthMm, headerHeightMm);
-    if (footerImgData) {
-      pdf.addImage(footerImgData, 'PNG', marginX, footerTop, contentWidthMm, footerHeightMm);
+    pdf.addImage(templateImg, 'PNG', 0, 0, pageWidth, pageHeight);
+    pdf.addImage(headerImg, 'PNG', marginX, headerTop, contentWidthMm, headerHeightMm);
+    if (footerImg) {
+      pdf.addImage(footerImg, 'PNG', marginX, footerTop, contentWidthMm, footerHeightMm);
     }
   }
 
