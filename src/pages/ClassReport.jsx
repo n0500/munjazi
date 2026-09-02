@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { listWeeksForClass } from '../lib/weeksApi';
 import { buildClassWeekReportData, buildClassRangeReportData } from '../lib/reportsApi';
-import { exportElementToPdf, exportClassWeekReportWithRepeatingHeader } from '../lib/pdfExport';
+import { exportElementToPdf, exportReportWithTemplate } from '../lib/pdfExport';
 import { STATUS_ICONS, STATUS_COLORS } from '../lib/recommendationsApi';
 import { colors, font, radius, spacing } from '../lib/theme';
 
@@ -38,6 +38,15 @@ const STATUS_KEYS = [
   { key: 'absent', label: 'غائبة' },
 ];
 
+// مناطق القالب العرضي (Landscape) بالمليمتر — متفقة مع تصميم القالب المرفوع
+const LANDSCAPE_ZONES = {
+  headerTop: 18,
+  contentTop: 34,
+  contentBottom: 185,
+  footerTop: 187,
+  marginX: 15,
+};
+
 export default function ClassReport({ schoolId, classId, teacherUid, className, subject, teacherName, onBack, defaultWeekName }) {
   const [weeks, setWeeks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +63,8 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
 
   const rangeReportRef = useRef(null);
   const weekHeaderRef = useRef(null);
-  const weekTableRef = useRef(null);
+  const weekBodyRef = useRef(null);
+  const weekFooterRef = useRef(null);
   const autoGenerateTriedRef = useRef(false);
 
   useEffect(() => {
@@ -73,12 +83,16 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
   }, [schoolId, classId, teacherUid]);
 
   async function downloadWeekReportPdf(weekName) {
-    if (!weekHeaderRef.current || !weekTableRef.current) return;
-    await exportClassWeekReportWithRepeatingHeader(
-      { headerEl: weekHeaderRef.current, tableEl: weekTableRef.current },
-      `تقرير-فصل-${weekName}.pdf`,
-      'l',
-    );
+    if (!weekHeaderRef.current || !weekBodyRef.current) return;
+    await exportReportWithTemplate({
+      templateSrc: 'templates/report-landscape.png',
+      headerEl: weekHeaderRef.current,
+      bodyEl: weekBodyRef.current,
+      footerEl: weekFooterRef.current,
+      orientation: 'l',
+      filename: `تقرير-فصل-${weekName}.pdf`,
+      zones: LANDSCAPE_ZONES,
+    });
   }
 
   async function generateSingleWeekReport(targetWeekId, { download } = { download: true }) {
@@ -171,6 +185,10 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
 
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
+  const reportTypeLabel = weekReport
+    ? (weekReport.weekTypeLabel === 'قياس' ? 'تقرير قياس مهارات' : 'تقرير معالجة مهارات')
+    : '';
+
   return (
     <div style={{ maxWidth: 600, margin: '20px auto', padding: spacing.lg }} dir="rtl">
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.primary, marginBottom: spacing.sm }}>
@@ -232,38 +250,51 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
 
       {weekReport && (
         <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
-          <div style={{ width: 1050, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
-            <div ref={weekHeaderRef} style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 20, background: '#fff', width: 990 }}>
-              <div style={{ fontSize: 13, color: '#666' }}>{weekReport.schoolName}</div>
-              <div style={{ fontSize: 13, color: '#666' }}>المادة: {weekReport.subject || 'غير محددة'}</div>
-              <div style={{ fontSize: 13, color: '#666' }}>{weekReport.weekName} — {weekReport.weekTypeLabel}</div>
-              <div style={{ fontSize: 16, fontWeight: 'bold', marginTop: 6 }}>تقرير فصل — {weekReport.className}</div>
+          {/* الهيدر: اسم المدرسة + المادة + الأسبوع فقط — يُلتقط مرة واحدة ويتكرر بنفس الموضع بكل صفحة */}
+          <div ref={weekHeaderRef} style={{ width: 1000, padding: '4px 0', fontFamily: 'sans-serif', textAlign: 'center' }} dir="rtl">
+            <div style={{ fontSize: 26, fontWeight: 'bold', color: '#14261e' }}>{weekReport.schoolName}</div>
+            <div style={{ fontSize: 16, color: '#555', marginTop: 8 }}>المادة: {weekReport.subject || 'غير محددة'}</div>
+            <div style={{ fontSize: 16, color: '#555', marginTop: 6 }}>{weekReport.weekName}</div>
+          </div>
+
+          {/* الفوتر: اسم المديرة والمعلمة — يُلتقط مرة واحدة ويتكرر بنفس الموضع بكل صفحة */}
+          <div ref={weekFooterRef} style={{ width: 1000, padding: '4px 0', fontFamily: 'sans-serif' }} dir="rtl">
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#333' }}>
+              <span>مديرة المدرسة: {weekReport.principalName || '—'}</span>
+              <span>المعلّمة: {weekReport.teacherName}</span>
+            </div>
+          </div>
+
+          {/* المحتوى: مسمى التقرير + الجدول — يُقسَّم بين الصفحات حسب الحاجة */}
+          <div ref={weekBodyRef} style={{ width: 1000, fontFamily: 'sans-serif' }} dir="rtl">
+            <div className="pdf-avoid-break" style={{ textAlign: 'center', marginBottom: 16 }}>
+              <div style={{ fontSize: 22, fontWeight: 'bold', color: colors.primary }}>{reportTypeLabel}</div>
               {weekReport.enrichmentLink && (
-                <p style={{ fontSize: 12, marginTop: 8 }}>
-                  الرابط الإثرائي: {weekReport.enrichmentLink}
+                <p style={{ fontSize: 12, marginTop: 6 }}>
+                  الرابط الإثرائي: <a href={weekReport.enrichmentLink} target="_blank" rel="noreferrer">{weekReport.enrichmentLink}</a>
                 </p>
               )}
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', margin: '10px 0 0', fontSize: 13 }}>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 8, fontSize: 13 }}>
                 {STATUS_KEYS.map((s) => (
                   <span key={s.key}>{s.label}: {weekReport.classCounts[s.key]}</span>
                 ))}
               </div>
             </div>
 
-            <table ref={weekTableRef} style={{ width: 990, borderCollapse: 'collapse', fontSize: 12 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>الطالبة</th>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الطالبة</th>
                   {weekReport.skillTitles.map((t, i) => (
-                    <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>{t}</th>
+                    <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>{t}</th>
                   ))}
-                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>التوصية</th>
-                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4, background: '#fff' }}>الإجراء</th>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>التوصية</th>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الإجراء</th>
                 </tr>
               </thead>
               <tbody>
                 {weekReport.rows.map((row, i) => (
-                  <tr key={i}>
+                  <tr key={i} className="pdf-avoid-break">
                     <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
                     {row.cells.map((c, j) => (
                       <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
@@ -274,14 +305,6 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
                 ))}
               </tbody>
             </table>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 30, paddingTop: 16, borderTop: '1px solid #ccc', fontSize: 13, width: 990 }}>
-              <span>مديرة المدرسة: {weekReport.principalName || '—'}</span>
-              <span>المعلّمة: {weekReport.teacherName}</span>
-            </div>
-            <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: '#999', width: 990 }}>
-              صادر من منجزي
-            </div>
           </div>
         </div>
       )}
