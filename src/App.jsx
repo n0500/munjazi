@@ -5,6 +5,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import ParentDashboard from './pages/ParentDashboard';
 import Logo from './components/Logo';
+import PdfTestPage from './pages/PdfTestPage';
 import { colors } from './lib/theme';
 
 function TopBar({ logout }) {
@@ -74,6 +75,12 @@ function AppInner() {
 }
 
 export default function App() {
+  const params = new URLSearchParams(window.location.search);
+  // مسار اختبار معزول تمامًا لتجربة PDF بالعربي — يُزال بعد انتهاء الاختبار
+  if (params.get('pdftest') === '1') {
+    return <PdfTestPage />;
+  }
+
   return (
     <AuthProvider>
       <AppInner />
