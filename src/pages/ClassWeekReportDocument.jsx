@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Font, Link } from '@react-pdf/renderer';
 
 Font.register({
   family: 'Amiri',
@@ -18,28 +18,32 @@ const STATUS_STYLE = {
 
 const COL_BORDER = '#cfcfcf';
 const ROW_BORDER = '#e0e0e0';
+// لون رأس الجدول محايد (كحلي غامق) بدل الأخضر — عشان يبقى الأخضر مخصصًا لحالة "متقنة" بس بدون التباس
+const HEADER_BG = '#14261e';
+const HEADER_DIVIDER = '#3a4a42';
 
 const styles = StyleSheet.create({
-  page: { fontFamily: 'Amiri', paddingTop: 105, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
+  page: { fontFamily: 'Amiri', paddingTop: 168, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
 
-  pageHeader: {
+  fixedHeaderBlock: {
     position: 'absolute', top: 14, left: 24, right: 24,
-    textAlign: 'center',
   },
-  schoolName: { fontFamily: 'Amiri-Bold', fontSize: 15, color: '#14261e', lineHeight: 1.3 },
-  headerLine: { fontSize: 9, color: '#555', marginTop: 4, lineHeight: 1.3 },
+  schoolName: { fontFamily: 'Amiri-Bold', fontSize: 15, color: '#14261e', textAlign: 'center', lineHeight: 1.3 },
+  headerLine: { fontSize: 9, color: '#555', textAlign: 'center', marginTop: 3, lineHeight: 1.3 },
+  reportTitle: { fontFamily: 'Amiri-Bold', fontSize: 14, color: '#0b7a4b', textAlign: 'center', marginTop: 8, marginBottom: 3 },
+  metaLine: { fontSize: 8, color: '#666', textAlign: 'center', marginBottom: 2 },
+  linkText: { color: '#0b7a4b', textDecoration: 'underline' },
+  statsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 8, fontSize: 8 },
 
-  // رأس الجدول: خلفية خضراء فاتحة + إطار كامل، متسق مع هوية الموقع
   columnHeaderRow: {
-    position: 'absolute', top: 82, left: 24, right: 24,
     flexDirection: 'row-reverse',
-    backgroundColor: '#eaf6ee',
-    borderWidth: 1, borderColor: '#0b7a4b',
+    backgroundColor: HEADER_BG,
+    borderWidth: 1, borderColor: HEADER_BG,
     paddingVertical: 5,
   },
   headerCell: {
-    fontFamily: 'Amiri-Bold', fontSize: 9, textAlign: 'center', color: '#0b5c33',
-    borderLeftWidth: 0.75, borderLeftColor: '#7fbfa0', paddingHorizontal: 3,
+    fontFamily: 'Amiri-Bold', fontSize: 9, textAlign: 'center', color: '#ffffff',
+    borderLeftWidth: 0.75, borderLeftColor: HEADER_DIVIDER, paddingHorizontal: 3,
   },
   headerCellFirst: { textAlign: 'right', paddingRight: 6 },
 
@@ -53,10 +57,6 @@ const styles = StyleSheet.create({
     fontSize: 9, textAlign: 'right', paddingHorizontal: 4, paddingVertical: 3,
     borderLeftWidth: 0.75, borderLeftColor: COL_BORDER,
   },
-
-  reportTitle: { fontFamily: 'Amiri-Bold', fontSize: 14, color: '#0b7a4b', textAlign: 'center', marginBottom: 4 },
-  metaLine: { fontSize: 8, color: '#666', textAlign: 'center', marginBottom: 2 },
-  statsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 10, fontSize: 8 },
 
   badge: {
     paddingHorizontal: 6, paddingVertical: 2.5, borderRadius: 4, borderWidth: 1,
@@ -102,29 +102,31 @@ export default function ClassWeekReportDocument({ data, reportTypeLabel }) {
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={styles.page}>
-        <View style={styles.pageHeader} fixed>
+        <View style={styles.fixedHeaderBlock} fixed>
           <Text style={styles.schoolName}>{data.schoolName}</Text>
           <Text style={styles.headerLine}>المادة: {data.subject || 'غير محددة'}</Text>
           <Text style={styles.headerLine}>{data.weekName}</Text>
-        </View>
 
-        <View style={styles.columnHeaderRow} fixed>
-          <Text style={[styles.headerCell, styles.headerCellFirst, { width: `${nameW}%` }]}>الطالبة</Text>
-          {data.skillTitles.map((t, i) => (
-            <Text key={i} style={[styles.headerCell, { width: `${skillW}%` }]}>{t}</Text>
-          ))}
-          <Text style={[styles.headerCell, { width: `${recW}%` }]}>التوصية</Text>
-          <Text style={[styles.headerCell, { width: `${actionW}%` }]}>الإجراء</Text>
-        </View>
+          <Text style={styles.reportTitle}>{reportTypeLabel}</Text>
+          {data.enrichmentLink && (
+            <Text style={styles.metaLine}>
+              الرابط الإثرائي: <Link src={data.enrichmentLink} style={styles.linkText}>{data.enrichmentLink}</Link>
+            </Text>
+          )}
+          <View style={styles.statsRow}>
+            {STATUS_KEYS.map((s) => (
+              <Text key={s.key}>{s.label}: {data.classCounts[s.key]}</Text>
+            ))}
+          </View>
 
-        <Text style={styles.reportTitle}>{reportTypeLabel}</Text>
-        {data.enrichmentLink && (
-          <Text style={styles.metaLine}>الرابط الإثرائي: {data.enrichmentLink}</Text>
-        )}
-        <View style={styles.statsRow}>
-          {STATUS_KEYS.map((s) => (
-            <Text key={s.key}>{s.label}: {data.classCounts[s.key]}</Text>
-          ))}
+          <View style={styles.columnHeaderRow}>
+            <Text style={[styles.headerCell, styles.headerCellFirst, { width: `${nameW}%` }]}>الطالبة</Text>
+            {data.skillTitles.map((t, i) => (
+              <Text key={i} style={[styles.headerCell, { width: `${skillW}%` }]}>{t}</Text>
+            ))}
+            <Text style={[styles.headerCell, { width: `${recW}%` }]}>التوصية</Text>
+            <Text style={[styles.headerCell, { width: `${actionW}%` }]}>الإجراء</Text>
+          </View>
         </View>
 
         {data.rows.map((row, i) => (
