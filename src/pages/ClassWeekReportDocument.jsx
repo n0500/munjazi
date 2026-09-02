@@ -1,12 +1,12 @@
 import { Document, Page, Text, View, StyleSheet, Font, Link } from '@react-pdf/renderer';
 
 Font.register({
-  family: 'Amiri',
-  src: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/amiri/Amiri-Regular.ttf',
+  family: 'Plex',
+  src: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/ibmplexsansarabic/IBMPlexSansArabic-Regular.ttf',
 });
 Font.register({
-  family: 'Amiri-Bold',
-  src: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/amiri/Amiri-Bold.ttf',
+  family: 'Plex-Bold',
+  src: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/ibmplexsansarabic/IBMPlexSansArabic-Bold.ttf',
 });
 
 const STATUS_STYLE = {
@@ -18,19 +18,18 @@ const STATUS_STYLE = {
 
 const COL_BORDER = '#cfcfcf';
 const ROW_BORDER = '#e0e0e0';
-// لون رأس الجدول محايد (كحلي غامق) بدل الأخضر — عشان يبقى الأخضر مخصصًا لحالة "متقنة" بس بدون التباس
 const HEADER_BG = '#14261e';
 const HEADER_DIVIDER = '#3a4a42';
 
 const styles = StyleSheet.create({
-  page: { fontFamily: 'Amiri', paddingTop: 168, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
+  page: { fontFamily: 'Plex', paddingTop: 168, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
 
   fixedHeaderBlock: {
     position: 'absolute', top: 14, left: 24, right: 24,
   },
-  schoolName: { fontFamily: 'Amiri-Bold', fontSize: 15, color: '#14261e', textAlign: 'center', lineHeight: 1.3 },
+  schoolName: { fontFamily: 'Plex-Bold', fontSize: 15, color: '#14261e', textAlign: 'center', lineHeight: 1.3 },
   headerLine: { fontSize: 9, color: '#555', textAlign: 'center', marginTop: 3, lineHeight: 1.3 },
-  reportTitle: { fontFamily: 'Amiri-Bold', fontSize: 14, color: '#0b7a4b', textAlign: 'center', marginTop: 8, marginBottom: 3 },
+  reportTitle: { fontFamily: 'Plex-Bold', fontSize: 14, color: '#0b7a4b', textAlign: 'center', marginTop: 8, marginBottom: 3 },
   metaLine: { fontSize: 8, color: '#666', textAlign: 'center', marginBottom: 2 },
   linkText: { color: '#0b7a4b', textDecoration: 'underline' },
   statsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 8, fontSize: 8 },
@@ -42,7 +41,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   headerCell: {
-    fontFamily: 'Amiri-Bold', fontSize: 9, textAlign: 'center', color: '#ffffff',
+    fontFamily: 'Plex-Bold', fontSize: 9, textAlign: 'center', color: '#ffffff',
     borderLeftWidth: 0.75, borderLeftColor: HEADER_DIVIDER, paddingHorizontal: 3,
   },
   headerCellFirst: { textAlign: 'right', paddingRight: 6 },
@@ -62,13 +61,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6, paddingVertical: 2.5, borderRadius: 4, borderWidth: 1,
     alignSelf: 'center', minWidth: 44, alignItems: 'center',
   },
-  badgeText: { fontSize: 9, fontFamily: 'Amiri-Bold' },
+  badgeText: { fontSize: 9, fontFamily: 'Plex-Bold' },
 
+  // فوتر: كل عمود ياخذ مساحة ثابتة (flex: 1) بدل ما يتزاحموا على بعض ويسببوا تداخل/قطع بالنص
   footer: {
     position: 'absolute', bottom: 14, left: 24, right: 24,
-    flexDirection: 'row-reverse', justifyContent: 'space-between',
+    flexDirection: 'row-reverse',
     fontSize: 8, color: '#333', borderTop: 0.5, borderTopColor: '#ccc', paddingTop: 6,
   },
+  footerColRight: { flex: 1, textAlign: 'right' },
+  footerColCenter: { flex: 1, textAlign: 'center' },
+  footerColLeft: { flex: 1, textAlign: 'left' },
 });
 
 function StatusBadge({ status, statusLabel }) {
@@ -149,9 +152,12 @@ export default function ClassWeekReportDocument({ data, reportTypeLabel }) {
         ))}
 
         <View style={styles.footer} fixed>
-          <Text>مديرة المدرسة: {data.principalName || '—'}</Text>
-          <Text>المعلّمة: {data.teacherName}</Text>
-          <Text render={({ pageNumber, totalPages }) => `صادر من منجزي — صفحة ${pageNumber} من ${totalPages}`} />
+          <Text style={styles.footerColRight}>مديرة المدرسة: {data.principalName || '—'}</Text>
+          <Text style={styles.footerColCenter}>المعلّمة: {data.teacherName}</Text>
+          <Text
+            style={styles.footerColLeft}
+            render={({ pageNumber, totalPages }) => `صادر من منجزي — صفحة ${pageNumber} من ${totalPages}`}
+          />
         </View>
       </Page>
     </Document>
