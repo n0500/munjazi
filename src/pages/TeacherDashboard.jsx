@@ -27,6 +27,7 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
   const [pickClassId, setPickClassId] = useState('');
   const [subject, setSubject] = useState('');
   const [linking, setLinking] = useState(false);
+  const [unlinkingId, setUnlinkingId] = useState(null);
 
   const [openClassId, setOpenClassId] = useState(null);
 
@@ -71,13 +72,22 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
     }
   }
 
-  async function handleUnlink(assignmentId) {
+  // إلغاء إسناد فصل من المعلمة نفسها — يحذف علاقة الإسناد فقط، والبيانات التاريخية
+  // (الأسابيع، المهارات، التقييمات) تبقى محفوظة بالكامل كما هي، غير متأثرة إطلاقًا
+  async function handleUnlink(assignment) {
+    const confirmed = window.confirm(
+      `متأكدة تبين تلغين إسنادك لفصل "${classNameFor(assignment.classId)}"${assignment.subject ? ` (${assignment.subject})` : ''}؟ لن يظهر هذا الفصل بلوحتك بعد الآن، لكن كل التقييمات والبيانات السابقة تبقى محفوظة بالنظام. تقدرين ترجعين تربطينه من جديد لاحقًا لو احتجتِ.`,
+    );
+    if (!confirmed) return;
     setError('');
+    setUnlinkingId(assignment.id);
     try {
-      await removeAssignment(schoolId, assignmentId);
+      await removeAssignment(schoolId, assignment.id);
       await refresh();
     } catch (err) {
       setError(err.message || 'تعذّر إزالة الربط.');
+    } finally {
+      setUnlinkingId(null);
     }
   }
 
@@ -199,8 +209,12 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
                 <button onClick={() => setOpenClassId(a.classId)} style={{ background: 'none', border: 'none', color: colors.ink, fontWeight: font.weightBold, fontSize: 16, cursor: 'pointer', fontFamily: font.family }}>
                   {classNameFor(a.classId)} — {a.subject || 'دون تحديد مادة'}
                 </button>
-                <button onClick={() => handleUnlink(a.id)} style={{ padding: '4px 10px', background: colors.red, color: '#fff', border: 'none', borderRadius: 6, fontSize: 13 }}>
-                  إزالة
+                <button
+                  onClick={() => handleUnlink(a)}
+                  disabled={unlinkingId === a.id}
+                  style={{ padding: '4px 10px', background: colors.red, color: '#fff', border: 'none', borderRadius: 6, fontSize: 13 }}
+                >
+                  {unlinkingId === a.id ? '...' : 'إلغاء الإسناد'}
                 </button>
               </div>
             ))
