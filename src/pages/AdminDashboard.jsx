@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { pdf } from '@react-pdf/renderer';
 import { getSchool } from '../lib/schoolsApi';
 import {
   listClasses,
@@ -16,6 +17,7 @@ import { getLatestWeekSummaryLight } from '../lib/overviewApi';
 import { listActionsForClass } from '../lib/actionEngine';
 import ClassDetail from './ClassDetail';
 import ClassReport from './ClassReport';
+import PendingAckReportDocument from './PendingAckReportDocument';
 import { colors, font, radius, spacing } from '../lib/theme';
 
 const TABS = [
@@ -23,6 +25,7 @@ const TABS = [
   { key: 'classes', label: 'الفصول والطالبات' },
   { key: 'teachers', label: 'المعلمات' },
   { key: 'tracking', label: 'متابعة الرصد' },
+  { key: 'pendingAck', label: 'اطلاع أولياء الأمور' },
 ];
 
 function daysSince(timestamp) {
@@ -38,6 +41,27 @@ function formatDaysAgo(days) {
   if (days === 2) return 'منذ يومين';
   if (days <= 10) return `منذ ${days} أيام`;
   return `منذ ${days} يومًا`;
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  try {
+    const date = value.toDate ? value.toDate() : new Date(value);
+    return date.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return '—';
+  }
+}
+
+async function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export default function AdminDashboard({ schoolId }) {
@@ -69,6 +93,9 @@ export default function AdminDashboard({ schoolId }) {
   const [trackingRows, setTrackingRows] = useState(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [reportTarget, setReportTarget] = useState(null);
+
+  const [pendingAckScope, setPendingAckScope] = useState('all');
+  const [pendingAckGenerating, setPendingAckGenerating] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -217,7 +244,7 @@ export default function AdminDashboard({ schoolId }) {
   }
 
   async function handleDeleteClass(cls) {
-    if (!window.confirm(`متأكدة تبين تحذفين فصل "${cls.name}"؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
+    if (!window.confirm(`سيتم حذف الفصل "${cls.name}" نهائيًا، ولا يمكن التراجع عن هذا الإجراء. هل الرغبة في المتابعة مؤكدة؟`)) return;
     setError('');
     setDeletingClassId(cls.id);
     try {
@@ -294,6 +321,59 @@ export default function AdminDashboard({ schoolId }) {
 
   function classAssignmentsCountFor(classId) {
     return assignments.filter((a) => a.classId === classId).length;
+  }
+
+  const classNameFor = (classId) => classes.find((c) => c.id === classId)?.name || '؟';
+
+  async function handleGeneratePendingAckReport() {
+    setError('');
+    setPendingAckGenerating(true);
+    try {
+      const targetClassIds = pendingAckScope === 'all'
+        ? [...new Set(assignments.map((a) => a.classId))]
+        : [pendingAckScope];
+
+      const actionsPerClass = await Promise.all(
+        targetClassIds.map((classId) => listActionsForClass(schoolId, classId)),
+      );
+      const allActions = actionsPerClass.flat();
+
+      const pendingRemedial = allActions.filter(
+        (a) => a.type === 'remedial' && a.status === 'active' && !a.parentAcknowledgment?.viewedAt,
+      );
+
+      const rows = pendingRemedial.map((a) => {
+        const assignment = assignments.find((x) => x.classId === a.classId && x.teacherUid === a.teacherUid);
+        return {
+          studentName: a.studentName,
+          teacherName: assignment?.teacherName || teachers.find((t) => t.uid === a.teacherUid)?.displayName || '؟',
+          subject: assignment?.subject || 'بدون مادة',
+          className: classNameFor(a.classId),
+          skillTitles: (a.affectedSkillTitles || []).join('، '),
+          activatedDate: formatDate(a.activatedAt),
+          repeated: (a.followUpLog?.length || 0) > 0,
+        };
+      });
+
+      rows.sort((a, b) => (b.repeated === a.repeated ? 0 : b.repeated ? 1 : -1));
+
+      const scopeLabel = pendingAckScope === 'all' ? 'المدرسة بالكامل' : `فصل: ${classNameFor(pendingAckScope)}`;
+      const generatedDate = new Date().toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
+
+      const blob = await pdf(
+        <PendingAckReportDocument
+          rows={rows}
+          schoolName={school?.name || ''}
+          scopeLabel={scopeLabel}
+          generatedDate={generatedDate}
+        />,
+      ).toBlob();
+      await downloadBlob(blob, `تقرير-اطلاع-أولياء-الأمور-${pendingAckScope === 'all' ? 'كامل-المدرسة' : classNameFor(pendingAckScope)}.pdf`);
+    } catch (err) {
+      setError(err.message || 'تعذّر توليد التقرير.');
+    } finally {
+      setPendingAckGenerating(false);
+    }
   }
 
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
@@ -574,6 +654,30 @@ export default function AdminDashboard({ schoolId }) {
               </table>
             </>
           )}
+        </>
+      )}
+
+      {activeTab === 'pendingAck' && (
+        <>
+          <p style={{ color: colors.textMuted, fontSize: 13, marginBottom: spacing.lg }}>
+            يولّد هذا القسم تقرير PDF بأسماء الطالبات اللواتي لديهن إجراء علاجي نشط، ولم يطّلع ولي أمرهن عليه بعد — عبر جميع المعلمات والفصول.
+          </p>
+          <div style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.lg }}>
+            <label>النطاق</label>
+            <select value={pendingAckScope} onChange={(e) => setPendingAckScope(e.target.value)} style={{ width: '100%', padding: spacing.sm, marginBottom: spacing.md }}>
+              <option value="all">المدرسة بالكامل</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleGeneratePendingAckReport}
+              disabled={pendingAckGenerating}
+              style={{ padding: '10px 16px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button }}
+            >
+              {pendingAckGenerating ? '...جارٍ التوليد' : 'توليد التقرير وتحميله'}
+            </button>
+          </div>
         </>
       )}
     </div>
