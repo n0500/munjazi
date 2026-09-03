@@ -1,12 +1,20 @@
+import { Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
-import OwnerDashboard from './pages/OwnerDashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import TeacherDashboard from './pages/TeacherDashboard';
-import ParentDashboard from './pages/ParentDashboard';
 import Logo from './components/Logo';
 import PdfTestPage from './pages/PdfTestPage';
 import { colors } from './lib/theme';
+
+// تحميل تدريجي (Lazy Loading) لكل لوحة — يتحمّل كودها فقط وقت الحاجة الفعلية لها،
+// بدل تحميل كل اللوحات دفعة واحدة عند أول فتح للموقع لأي مستخدم
+const OwnerDashboard = lazy(() => import('./pages/OwnerDashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard'));
+const ParentDashboard = lazy(() => import('./pages/ParentDashboard'));
+
+function LoadingFallback() {
+  return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
+}
 
 function TopBar({ logout }) {
   return (
@@ -44,7 +52,9 @@ function AppInner() {
     return (
       <div>
         <TopBar logout={logout} />
-        <OwnerDashboard />
+        <Suspense fallback={<LoadingFallback />}>
+          <OwnerDashboard />
+        </Suspense>
       </div>
     );
   }
@@ -53,7 +63,9 @@ function AppInner() {
     return (
       <div>
         <TopBar logout={logout} />
-        <AdminDashboard schoolId={profile.schoolId} />
+        <Suspense fallback={<LoadingFallback />}>
+          <AdminDashboard schoolId={profile.schoolId} />
+        </Suspense>
       </div>
     );
   }
@@ -62,14 +74,18 @@ function AppInner() {
     return (
       <div>
         <TopBar logout={logout} />
-        <TeacherDashboard schoolId={profile.schoolId} teacherUid={firebaseUser.uid} teacherName={profile.displayName} />
+        <Suspense fallback={<LoadingFallback />}>
+          <TeacherDashboard schoolId={profile.schoolId} teacherUid={firebaseUser.uid} teacherName={profile.displayName} />
+        </Suspense>
       </div>
     );
   }
 
   return (
     <div>
-      <ParentDashboard schoolId={profile.schoolId} profile={profile} logout={logout} />
+      <Suspense fallback={<LoadingFallback />}>
+        <ParentDashboard schoolId={profile.schoolId} profile={profile} logout={logout} />
+      </Suspense>
     </div>
   );
 }
