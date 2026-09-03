@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { pdf } from '@react-pdf/renderer';
 import { listClasses, listTeacherAssignments } from '../lib/classesApi';
 import {
   suggestCandidates,
@@ -11,8 +12,8 @@ import {
   FOLLOW_UP_PRESETS,
 } from '../lib/remediationApi';
 import { getSchool } from '../lib/schoolsApi';
-import { exportElementToPdf } from '../lib/pdfExport';
 import { colors, font, radius, spacing } from '../lib/theme';
+import RemediationPlanDocument from './RemediationPlanDocument';
 
 const STATUS_TEXT = { active: 'نشطة', closedSuccess: 'أُغلقت — نجحت', closedFailure: 'أُغلقت — لم تنجح' };
 
@@ -23,6 +24,17 @@ function formatDate(value) {
   } catch {
     return '—';
   }
+}
+
+async function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export default function RemediationPlans({ schoolId, teacherUid, teacherName, onBack }) {
@@ -37,11 +49,7 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
   const [suggestedTextByPlan, setSuggestedTextByPlan] = useState({});
   const [followUpDraft, setFollowUpDraft] = useState('');
   const [creatingPlanKey, setCreatingPlanKey] = useState(null);
-
-  const [pdfPlan, setPdfPlan] = useState(null);
-  const [pdfFollowUps, setPdfFollowUps] = useState([]);
-  const [schoolInfo, setSchoolInfo] = useState(null);
-  const pdfRef = useRef(null);
+  const [exportingPlanId, setExportingPlanId] = useState(null);
 
   const classNameFor = (classId) => classes.find((c) => c.id === classId)?.name || '؟';
   const subjectFor = (classId) => assignments.find((a) => a.classId === classId)?.subject || '';
@@ -146,20 +154,28 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
 
   async function handleExportPdf(plan) {
     setError('');
+    setExportingPlanId(plan.id);
     try {
       const [school, followUps] = await Promise.all([
         getSchool(schoolId),
         listFollowUps(schoolId, plan.id),
       ]);
-      setSchoolInfo(school);
-      setPdfFollowUps(followUps);
-      setPdfPlan(plan);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      if (pdfRef.current) {
-        await exportElementToPdf(pdfRef.current, `خطة-علاجية-${plan.studentName}.pdf`);
-      }
+      const blob = await pdf(
+        <RemediationPlanDocument
+          plan={plan}
+          followUps={followUps}
+          schoolName={school.name}
+          principalName={school.principalName || ''}
+          teacherName={teacherName}
+          className={classNameFor(plan.classId)}
+          subject={subjectFor(plan.classId)}
+        />,
+      ).toBlob();
+      await downloadBlob(blob, `خطة-علاجية-${plan.studentName}.pdf`);
     } catch (err) {
       setError(err.message || 'تعذّر توليد التقرير.');
+    } finally {
+      setExportingPlanId(null);
     }
   }
 
@@ -257,15 +273,19 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
                   </div>
                 ))}
 
-                <div style={{ display: 'flex', gap: 8, marginTop: spacing.sm }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: spacing.sm, flexWrap: 'wrap' }}>
                   <button onClick={() => handleClose(plan, 'success')} style={{ padding: '6px 12px', background: colors.primaryTint, color: '#0b5c33', border: `1px solid ${colors.primary}`, borderRadius: radius.button, fontSize: 12 }}>
                     أُغلقت — نجحت
                   </button>
                   <button onClick={() => handleClose(plan, 'failure')} style={{ padding: '6px 12px', background: colors.redTint, color: colors.red, border: `1px solid ${colors.redBorder}`, borderRadius: radius.button, fontSize: 12 }}>
                     أُغلقت — لم تنجح
                   </button>
-                  <button onClick={() => handleExportPdf(plan)} style={{ padding: '6px 12px', background: '#f2f2f2', border: 'none', borderRadius: radius.button, fontSize: 12 }}>
-                    تحميل PDF
+                  <button
+                    onClick={() => handleExportPdf(plan)}
+                    disabled={exportingPlanId === plan.id}
+                    style={{ padding: '6px 12px', background: '#f2f2f2', border: 'none', borderRadius: radius.button, fontSize: 12 }}
+                  >
+                    {exportingPlanId === plan.id ? '...' : 'تحميل PDF'}
                   </button>
                 </div>
               </div>
@@ -283,52 +303,6 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
             </div>
           ))}
         </>
-      )}
-
-      {pdfPlan && schoolInfo && (
-        <div style={{ position: 'fixed', top: -99999, left: -99999 }}>
-          <div ref={pdfRef} style={{ width: 700, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
-            <div style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: '#666' }}>{schoolInfo.name}</div>
-              <div style={{ fontSize: 13, color: '#666' }}>المادة: {subjectFor(pdfPlan.classId) || 'غير محددة'}</div>
-              <div style={{ fontSize: 16, fontWeight: 'bold', marginTop: 6 }}>خطة علاجية</div>
-            </div>
-            <p><strong>الطالبة:</strong> {pdfPlan.studentName}</p>
-            <p><strong>الفصل:</strong> {classNameFor(pdfPlan.classId)}</p>
-            <p><strong>المهارة المستهدفة:</strong> {pdfPlan.skillTitle}</p>
-            <p><strong>الحالة:</strong> {STATUS_TEXT[pdfPlan.status]}</p>
-            {pdfPlan.action && <p><strong>الإجراء:</strong> {pdfPlan.action}</p>}
-            {pdfPlan.enrichmentLink && (
-              <p style={{ fontSize: 13 }}>
-                الرابط الإثرائي: <a href={pdfPlan.enrichmentLink} target="_blank" rel="noreferrer">{pdfPlan.enrichmentLink}</a>
-              </p>
-            )}
-            <p style={{ fontSize: 13 }}>
-              تاريخ البداية: {formatDate(pdfPlan.startDate?.toDate ? pdfPlan.startDate.toDate() : pdfPlan.startDate)} — تاريخ المراجعة المتوقّع: {formatDate(pdfPlan.reviewDate)}
-            </p>
-
-            <h3>سجل المتابعة</h3>
-            {pdfFollowUps.length === 0 ? (
-              <p style={{ fontSize: 13, color: '#999' }}>لا توجد متابعات مسجّلة بعد.</p>
-            ) : (
-              pdfFollowUps.map((f) => (
-                <div key={f.id} style={{ fontSize: 13, padding: '6px 0', borderBottom: '1px solid #eee' }}>
-                  <span style={{ color: '#999', fontSize: 11 }}>{formatDate(f.createdAt?.toDate ? f.createdAt.toDate() : f.createdAt)}</span>
-                  <div>{f.text}</div>
-                </div>
-              ))
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 30, paddingTop: 16, borderTop: '1px solid #ccc', fontSize: 13 }}>
-              <span>مديرة المدرسة: {schoolInfo.principalName || '—'}</span>
-              <span>المعلّمة: {teacherName}</span>
-            </div>
-
-            <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: '#999' }}>
-              صادر من منجزي
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
