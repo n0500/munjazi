@@ -1,44 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { listWeeksForClass } from '../lib/weeksApi';
 import { buildClassWeekReportData, buildClassRangeReportData } from '../lib/reportsApi';
-import { exportElementToPdf } from '../lib/pdfExport';
-import { STATUS_ICONS, STATUS_COLORS } from '../lib/recommendationsApi';
 import { colors, font, radius, spacing } from '../lib/theme';
 import ClassWeekReportDocument from './ClassWeekReportDocument';
-
-function StatusBadge({ status, statusLabel }) {
-  if (!status) return <span>{statusLabel}</span>;
-  const c = STATUS_COLORS[status];
-  return (
-    <span style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: 6, padding: '2px 6px', fontWeight: 'bold', fontSize: 12, whiteSpace: 'nowrap' }}>
-      {STATUS_ICONS[status]} {statusLabel}
-    </span>
-  );
-}
-
-function ActionsCell({ actions }) {
-  if (!actions || actions.length === 0) return <span style={{ color: '#ccc' }}>—</span>;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {actions.map((a, i) => (
-        <div key={i} style={{ fontSize: 11 }}>
-          <span style={{ color: a.type === 'remedial' ? '#8a5a00' : '#0b5c33', fontWeight: 'bold' }}>
-            {a.type === 'remedial' ? '⚠' : '⭐'} {a.affectedSkillTitles.join('، ')}:
-          </span>
-          {' '}{a.text}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const STATUS_KEYS = [
-  { key: 'mastered', label: 'متقنة' },
-  { key: 'needsSupport', label: 'تحتاج دعم' },
-  { key: 'notMastered', label: 'غير متقنة' },
-  { key: 'absent', label: 'غائبة' },
-];
+import ClassRangeReportDocument from './ClassRangeReportDocument';
 
 async function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -64,9 +30,6 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
 
   const [weekReport, setWeekReport] = useState(null);
   const [rangeReport, setRangeReport] = useState(null);
-
-  const rangeReportRef = useRef(null);
-  const autoGenerateTriedRef = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -94,6 +57,11 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
       <ClassWeekReportDocument data={data} reportTypeLabel={reportTypeLabelFor(data)} />,
     ).toBlob();
     await downloadBlob(blob, `تقرير-فصل-${data.weekName}.pdf`);
+  }
+
+  async function downloadRangeReportPdf(data) {
+    const blob = await pdf(<ClassRangeReportDocument data={data} />).toBlob();
+    await downloadBlob(blob, `تقرير-فصل-مدى-أسابيع-${data.className}.pdf`);
   }
 
   async function generateSingleWeekReport(targetWeekId, { download } = { download: true }) {
@@ -126,10 +94,9 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
   }
 
   useEffect(() => {
-    if (loading || autoGenerateTriedRef.current || !defaultWeekName || weeks.length === 0) return;
+    if (loading || !defaultWeekName || weeks.length === 0) return;
     const match = weeks.find((w) => w.name === defaultWeekName);
     if (match) {
-      autoGenerateTriedRef.current = true;
       setWeekId(match.id);
       generateSingleWeekReport(match.id, { download: false });
     }
@@ -157,8 +124,7 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
         });
         setRangeReport(data);
         setWeekReport(null);
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        if (rangeReportRef.current) await exportElementToPdf(rangeReportRef.current, `تقرير-فصل-ملخص.pdf`, 'l');
+        await downloadRangeReportPdf(data);
       }
     } catch (err) {
       setError(err.message || 'تعذّر توليد التقرير.');
@@ -172,8 +138,8 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
     try {
       if (weekReport) {
         await downloadWeekReportPdf(weekReport);
-      } else if (rangeReportRef.current) {
-        await exportElementToPdf(rangeReportRef.current, `تقرير-فصل-ملخص.pdf`, 'l');
+      } else if (rangeReport) {
+        await downloadRangeReportPdf(rangeReport);
       }
     } catch (err) {
       setError(err.message || 'تعذّر تحميل التقرير.');
@@ -184,6 +150,8 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
 
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
+  const currentReportName = weekReport ? weekReport.weekName : rangeReport ? `${rangeReport.fromWeekName} — ${rangeReport.toWeekName}` : '';
+
   return (
     <div style={{ maxWidth: 600, margin: '20px auto', padding: spacing.lg }} dir="rtl">
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.primary, marginBottom: spacing.sm }}>
@@ -193,9 +161,9 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
 
       {error && <div style={{ background: colors.redTint, color: colors.red, padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{error}</div>}
 
-      {weekReport && (
+      {(weekReport || rangeReport) && (
         <div style={{ background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: radius.button, padding: spacing.sm, marginBottom: spacing.md, fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-          <span>✓ تقرير {weekReport.weekName} جاهز — عدّلي الأسبوع بالنموذج لو أردتِ فترة مختلفة.</span>
+          <span>✓ تقرير {currentReportName} جاهز — عدّلي الخيارات بالنموذج لو أردتِ فترة مختلفة.</span>
           <button onClick={handleDownloadCurrent} disabled={generating} style={{ padding: '6px 14px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button, fontSize: 12, whiteSpace: 'nowrap' }}>
             {generating ? '...' : 'تحميل PDF'}
           </button>
@@ -242,82 +210,6 @@ export default function ClassReport({ schoolId, classId, teacherUid, className, 
           {generating ? '...جارٍ التوليد' : 'توليد التقرير وتحميله'}
         </button>
       </form>
-
-      {rangeReport && (
-        <div style={{ position: 'fixed', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
-          <div ref={rangeReportRef} style={{ width: 1050, padding: 30, background: '#fff', fontFamily: 'sans-serif' }} dir="rtl">
-            <div style={{ textAlign: 'center', borderBottom: '2px solid #0b7a4b', paddingBottom: 12, marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: '#666' }}>{rangeReport.schoolName}</div>
-              <div style={{ fontSize: 13, color: '#666' }}>المادة: {rangeReport.subject || 'غير محددة'}</div>
-              <div style={{ fontSize: 13, color: '#666' }}>من {rangeReport.fromWeekName} إلى {rangeReport.toWeekName}</div>
-              <div style={{ fontSize: 16, fontWeight: 'bold', marginTop: 6 }}>تقرير فصل — {rangeReport.className}</div>
-            </div>
-
-            {rangeReport.weeks.map((w, wIdx) => {
-              const isLastWeek = wIdx === rangeReport.weeks.length - 1;
-              return (
-                <div key={w.id} className="pdf-avoid-break" style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 14 }}>
-                  <h3 style={{ margin: '0 0 8px' }}>{w.name} — {w.typeLabel}</h3>
-                  {w.enrichmentLink && (
-                    <p style={{ fontSize: 12 }}>
-                      الرابط الإثرائي: <a href={w.enrichmentLink} target="_blank" rel="noreferrer">{w.enrichmentLink}</a>
-                    </p>
-                  )}
-                  {w.skillTitles.length === 0 ? (
-                    <p style={{ fontSize: 12, color: '#999' }}>لا توجد مهارات بهذا الأسبوع.</p>
-                  ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الطالبة</th>
-                          {w.skillTitles.map((t, i) => (
-                            <th key={i} style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>{t}</th>
-                          ))}
-                          <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>التوصية</th>
-                          {isLastWeek && (
-                            <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: 4 }}>الإجراء (الوضع الحالي)</th>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {w.rows.map((row, i) => (
-                          <tr key={i}>
-                            <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.name}</td>
-                            {row.cells.map((c, j) => (
-                              <td key={j} style={{ padding: 4, borderBottom: '1px solid #eee' }}><StatusBadge status={c.status} statusLabel={c.statusLabel} /></td>
-                            ))}
-                            <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>{row.recommendation}</td>
-                            {isLastWeek && (
-                              <td style={{ padding: 4, borderBottom: '1px solid #eee' }}>
-                                <ActionsCell actions={rangeReport.studentActiveActions?.[row.name]} />
-                              </td>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              );
-            })}
-
-            <div style={{ display: 'flex', gap: 10, margin: '14px 0', fontSize: 13 }}>
-              <strong>ملخص إحصائي إجمالي:</strong>
-              {STATUS_KEYS.map((s) => (
-                <span key={s.key}>{s.label}: {rangeReport.classCounts[s.key]}</span>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 30, paddingTop: 16, borderTop: '1px solid #ccc', fontSize: 13 }}>
-              <span>مديرة المدرسة: {rangeReport.principalName || '—'}</span>
-              <span>المعلّمة: {rangeReport.teacherName}</span>
-            </div>
-            <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: '#999' }}>
-              صادر من منجزي
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
