@@ -50,7 +50,30 @@ export async function updateWeek(schoolId, weekId, { name, type, enrichmentLink 
   });
 }
 
+// محفوظة للتوافق مع أي استخدام سابق — تحذف وثيقة الأسبوع فقط دون مهاراته وتقييماته.
+// يُفضَّل استخدام deleteWeekWithData بدلًا منها لضمان عدم بقاء بيانات يتيمة.
 export async function deleteWeek(schoolId, weekId) {
+  await deleteDoc(doc(db, 'schools', schoolId, 'weeks', weekId));
+}
+
+// حذف أسبوع كامل نهائيًا، مع كل مهاراته وكل التقييمات المسجَّلة على تلك المهارات
+// لكل الطالبات — يُستخدم بعد تأكيد صريح من المعلمة، لأن العملية لا رجعة فيها.
+export async function deleteWeekWithData(schoolId, weekId) {
+  const skills = await listSkillsForWeek(schoolId, weekId);
+
+  for (const skill of skills) {
+    const assessmentsQ = query(
+      collection(db, 'schools', schoolId, 'assessments'),
+      where('skillId', '==', skill.id),
+    );
+    // eslint-disable-next-line no-await-in-loop
+    const assessmentsSnap = await getDocs(assessmentsQ);
+    // eslint-disable-next-line no-await-in-loop
+    await Promise.all(assessmentsSnap.docs.map((d) => deleteDoc(d.ref)));
+    // eslint-disable-next-line no-await-in-loop
+    await deleteDoc(doc(db, 'schools', schoolId, 'skills', skill.id));
+  }
+
   await deleteDoc(doc(db, 'schools', schoolId, 'weeks', weekId));
 }
 
