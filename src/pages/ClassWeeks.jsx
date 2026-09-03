@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listWeeksForClass, createWeek, copyWeek } from '../lib/weeksApi';
+import { listWeeksForClass, createWeek, copyWeek, deleteWeekWithData, countActiveActionsForWeek } from '../lib/weeksApi';
 import { SCHOOL_WEEK_NAMES } from '../lib/schoolWeekNames';
 import WeekDetail from './WeekDetail';
 import StudentReport from './StudentReport';
@@ -26,6 +26,7 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
   const [selectedWeekId, setSelectedWeekId] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const [showClassReport, setShowClassReport] = useState(false);
+  const [deletingWeekId, setDeletingWeekId] = useState(null);
 
   async function refresh() {
     setLoading(true);
@@ -78,6 +79,29 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
       setError(err.message || 'تعذّر نسخ الأسبوع الدراسي.');
     } finally {
       setCopying(false);
+    }
+  }
+
+  async function handleDeleteWeek(week) {
+    setError('');
+    setDeletingWeekId(week.id);
+    try {
+      const activeActionsCount = await countActiveActionsForWeek(schoolId, week.id);
+      let message = `متأكدة تبين تحذفين "${week.name}" (${TYPE_LABELS[week.type]})؟ سيتم حذف كل المهارات والتقييمات والتوصيات المسجَّلة بهذا الأسبوع نهائيًا، ولا يمكن التراجع عن هذا الإجراء.`;
+      if (activeActionsCount > 0) {
+        message += `\n\nتنبيه: يوجد ${activeActionsCount} إجراء (علاجي/إثرائي) نشط مرتبط بهذا الأسبوع — سيبقى هذا الإجراء كما هو دون حذف.`;
+      }
+      const confirmed = window.confirm(message);
+      if (!confirmed) {
+        setDeletingWeekId(null);
+        return;
+      }
+      await deleteWeekWithData(schoolId, week.id);
+      await refresh();
+    } catch (err) {
+      setError(err.message || 'تعذّر حذف الأسبوع الدراسي.');
+    } finally {
+      setDeletingWeekId(null);
     }
   }
 
@@ -198,9 +222,18 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
       ) : (
         weeks.map((w) => (
           <div key={w.id} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.button, marginBottom: 8, padding: spacing.md }}>
-            <button onClick={() => setSelectedWeekId(w.id)} style={{ background: 'none', border: 'none', color: colors.ink, fontWeight: 'bold', fontSize: 16, textAlign: 'right', cursor: 'pointer', fontFamily: font.family }}>
-              {w.name} — {TYPE_LABELS[w.type]}
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              <button onClick={() => setSelectedWeekId(w.id)} style={{ background: 'none', border: 'none', color: colors.ink, fontWeight: 'bold', fontSize: 16, textAlign: 'right', cursor: 'pointer', fontFamily: font.family }}>
+                {w.name} — {TYPE_LABELS[w.type]}
+              </button>
+              <button
+                onClick={() => handleDeleteWeek(w)}
+                disabled={deletingWeekId === w.id}
+                style={{ padding: '4px 10px', background: colors.redTint, border: `1px solid ${colors.redBorder}`, color: colors.red, borderRadius: 6, fontSize: 12 }}
+              >
+                {deletingWeekId === w.id ? '...' : 'حذف'}
+              </button>
+            </div>
             {w.enrichmentLink && (
               <div style={{ fontSize: 13, marginTop: 4 }}>
                 <a href={w.enrichmentLink} target="_blank" rel="noreferrer" style={{ color: colors.primary }}>الرابط الإثرائي</a>
