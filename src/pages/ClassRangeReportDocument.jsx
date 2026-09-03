@@ -29,26 +29,30 @@ const styles = StyleSheet.create({
   reportTitle: { fontFamily: 'Plex-Bold', fontSize: 14, color: '#0b7a4b', textAlign: 'center', marginTop: 8, lineHeight: 1.3 },
   metaLine: { fontSize: 9, color: '#555', textAlign: 'center', marginTop: 4, lineHeight: 1.3 },
 
+  // القسم الأسبوعي بالكامل عاد يسمح بالانقسام الطبيعي بين الصفحات (لا يوجد wrap={false} هنا)
   weekBlock: { borderWidth: 1, borderColor: '#ddd', borderRadius: 6, padding: 10, marginBottom: 12 },
+  weekTitleBlock: { marginBottom: 6 },
   weekTitle: { fontFamily: 'Plex-Bold', fontSize: 11, marginBottom: 4 },
-  weekLink: { fontSize: 8, color: '#0b7a4b', textDecoration: 'underline', marginBottom: 6 },
+  weekLink: { fontSize: 8, color: '#0b7a4b', textDecoration: 'underline' },
   noSkillsText: { fontSize: 8.5, color: '#999' },
 
   tableHeaderRow: { flexDirection: 'row-reverse', backgroundColor: HEADER_BG, paddingVertical: 4 },
   headerCell: {
-    fontFamily: 'Plex-Bold', fontSize: 8, color: '#fff', textAlign: 'center',
+    fontFamily: 'Plex-Bold', fontSize: 7.5, color: '#fff', textAlign: 'center',
     borderLeftWidth: 0.5, borderLeftColor: HEADER_DIVIDER,
   },
   headerCellFirst: { textAlign: 'right', paddingRight: 5 },
 
-  skillRow: { flexDirection: 'row-reverse', minHeight: 18, alignItems: 'center', borderBottomWidth: 0.5, borderBottomColor: ROW_BORDER },
-  skillCell: { fontSize: 8, paddingHorizontal: 4, paddingVertical: 3, borderLeftWidth: 0.5, borderLeftColor: COL_BORDER },
-  recCell: { fontSize: 7.5 },
+  // كل صف طالبة على حدة يبقى محميًا من القطع بمنتصفه (wrap={false} على الصف نفسه فقط)
+  skillRow: { flexDirection: 'row-reverse', minHeight: 18, alignItems: 'flex-start', borderBottomWidth: 0.5, borderBottomColor: ROW_BORDER },
+  skillCell: { fontSize: 7.5, paddingHorizontal: 4, paddingVertical: 4, borderLeftWidth: 0.5, borderLeftColor: COL_BORDER },
+  nameCell: { fontFamily: 'Plex', fontSize: 8 },
+  recCell: { fontSize: 7 },
 
-  badge: { paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4, borderWidth: 1, alignSelf: 'center', minWidth: 38, alignItems: 'center' },
+  badge: { paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4, borderWidth: 1, alignSelf: 'flex-start', minWidth: 38, alignItems: 'center', marginTop: 1 },
   badgeText: { fontSize: 7.5, fontFamily: 'Plex-Bold' },
 
-  actionsCell: { fontSize: 7 },
+  actionsCell: { fontSize: 6.5 },
 
   summaryBox: { borderWidth: 1, borderColor: '#0b7a4b', borderRadius: 6, padding: 10, marginTop: 4, marginBottom: 10 },
   summaryTitle: { fontFamily: 'Plex-Bold', fontSize: 10, marginBottom: 4, color: '#0b5c33' },
@@ -81,9 +85,9 @@ const STATUS_KEYS = [
 ];
 
 function weekColumnWidths(skillCount, includeActions) {
-  const nameW = 18;
-  const recW = 24;
-  const actionW = includeActions ? 18 : 0;
+  const nameW = 24;
+  const recW = 19;
+  const actionW = includeActions ? 15 : 0;
   const remaining = 100 - nameW - recW - actionW;
   const skillW = remaining / Math.max(skillCount, 1);
   return { nameW, recW, actionW, skillW };
@@ -104,19 +108,21 @@ export default function ClassRangeReportDocument({ data }) {
           const isLastWeek = wIdx === data.weeks.length - 1;
           const { nameW, recW, actionW, skillW } = weekColumnWidths(w.skillTitles.length, isLastWeek);
           return (
-            <View key={w.id} style={styles.weekBlock} wrap={false}>
-              <Text style={styles.weekTitle}>{w.name} — {w.typeLabel}</Text>
-              {w.enrichmentLink && (
-                <Text style={styles.weekLink}>
-                  <Link src={w.enrichmentLink} style={styles.weekLink}>الرابط الإثرائي</Link>
-                </Text>
-              )}
+            <View key={w.id} style={styles.weekBlock}>
+              <View style={styles.weekTitleBlock} wrap={false}>
+                <Text style={styles.weekTitle}>{w.name} — {w.typeLabel}</Text>
+                {w.enrichmentLink && (
+                  <Text style={styles.weekLink}>
+                    <Link src={w.enrichmentLink} style={styles.weekLink}>الرابط الإثرائي</Link>
+                  </Text>
+                )}
+              </View>
 
               {w.skillTitles.length === 0 ? (
                 <Text style={styles.noSkillsText}>لا توجد مهارات مسجَّلة لهذا الأسبوع.</Text>
               ) : (
                 <>
-                  <View style={styles.tableHeaderRow}>
+                  <View style={styles.tableHeaderRow} fixed>
                     <Text style={[styles.headerCell, styles.headerCellFirst, { width: `${nameW}%` }]}>الطالبة</Text>
                     {w.skillTitles.map((t, i) => (
                       <Text key={i} style={[styles.headerCell, { width: `${skillW}%` }]}>{t}</Text>
@@ -127,10 +133,10 @@ export default function ClassRangeReportDocument({ data }) {
                     )}
                   </View>
                   {w.rows.map((row, i) => (
-                    <View key={i} style={styles.skillRow}>
-                      <Text style={[styles.skillCell, { width: `${nameW}%` }]}>{row.name}</Text>
+                    <View key={i} style={styles.skillRow} wrap={false}>
+                      <Text style={[styles.skillCell, styles.nameCell, { width: `${nameW}%` }]}>{row.name}</Text>
                       {row.cells.map((c, j) => (
-                        <View key={j} style={[styles.skillCell, { width: `${skillW}%` }]}>
+                        <View key={j} style={[styles.skillCell, { width: `${skillW}%`, alignItems: 'center' }]}>
                           <StatusBadge status={c.status} statusLabel={c.statusLabel} />
                         </View>
                       ))}
