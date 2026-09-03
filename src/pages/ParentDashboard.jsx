@@ -22,7 +22,7 @@ function SkillBadge({ status, statusLabel }) {
   );
 }
 
-// تصنيف دقيق لكل مادة، من الأخطر إلى الأفضل:
+// تصنيف دقيق لكل مادة (للشارة العلوية فقط)، من الأخطر إلى الأفضل:
 // إجراء نشط (رسمي موثّق) > غير متقنة > تحتاج دعمًا > ممتازة > غائبة بالكامل > غائبة جزئيًا > لم تُرصد
 function classifySubject(subject) {
   const hasActiveRemedial = subject.activeActions.some((a) => a.type === 'remedial');
@@ -158,8 +158,11 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
     .filter((s) => s.classification !== 'notTracked');
 
   const activeActionCount = trackedSubjects.filter((s) => s.classification === 'activeAction').length;
-  const notMasteredCount = trackedSubjects.filter((s) => s.classification === 'notMastered').length;
-  const needsSupportCount = trackedSubjects.filter((s) => s.classification === 'needsSupport').length;
+  // نحسب "غير متقنة" و"تحتاج دعمًا" من وجود مهارة فعلية بهذي الحالة، بغض النظر عن التصنيف
+  // الحصري للمادة (بدون كذا، مادة فيها مهارة غير متقنة تولّد عنها إجراء نشط كانت تختفي من هذا
+  // العدّاد لأن التصنيف الحصري يعطي أولوية أعلى لـ"إجراء نشط")
+  const notMasteredCount = trackedSubjects.filter((s) => weakSkillsFor(s).length > 0).length;
+  const needsSupportCount = trackedSubjects.filter((s) => (s.skillRows || []).some((sk) => sk.status === 'needsSupport')).length;
   const excellentCount = trackedSubjects.filter((s) => s.classification === 'excellent').length;
 
   const filteredSubjects = trackedSubjects.filter((s) => {
