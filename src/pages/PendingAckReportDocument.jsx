@@ -15,10 +15,11 @@ const ROW_BORDER = '#e0e0e0';
 const COL_BORDER = '#cfcfcf';
 
 const styles = StyleSheet.create({
-  page: { fontFamily: 'Plex', paddingTop: 128, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
+  page: { fontFamily: 'Plex', paddingTop: 130, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
 
   fixedHeaderBlock: { position: 'absolute', top: 14, left: 24, right: 24 },
-  reportTitle: { fontFamily: 'Plex-Bold', fontSize: 15, color: '#a10000', textAlign: 'center', lineHeight: 1.3 },
+  schoolName: { fontFamily: 'Plex-Bold', fontSize: 14, color: '#14261e', textAlign: 'center', lineHeight: 1.3 },
+  reportTitle: { fontFamily: 'Plex-Bold', fontSize: 14, color: '#a10000', textAlign: 'center', marginTop: 6, lineHeight: 1.3 },
   metaLine: { fontSize: 9, color: '#555', textAlign: 'center', marginTop: 3, lineHeight: 1.3 },
   scopeLine: { fontSize: 9, color: '#0b7a4b', fontFamily: 'Plex-Bold', textAlign: 'center', marginTop: 4 },
   countLine: { fontSize: 9, color: '#a10000', textAlign: 'center', marginTop: 6, marginBottom: 8, fontFamily: 'Plex-Bold' },
@@ -57,8 +58,8 @@ export default function PendingAckReportDocument({ rows, schoolName, scopeLabel,
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.fixedHeaderBlock} fixed>
+          <Text style={styles.schoolName}>{schoolName}</Text>
           <Text style={styles.reportTitle}>تقرير: أولياء أمور لم يطّلعوا على إجراءات نشطة</Text>
-          <Text style={styles.metaLine}>{schoolName}</Text>
           <Text style={styles.metaLine}>تاريخ التقرير: {generatedDate}</Text>
           <Text style={styles.scopeLine}>النطاق: {scopeLabel}</Text>
           <Text style={styles.countLine}>عدد الحالات: {rows.length}</Text>
