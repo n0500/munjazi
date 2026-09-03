@@ -15,28 +15,31 @@ const ROW_BORDER = '#e0e0e0';
 const COL_BORDER = '#cfcfcf';
 
 const styles = StyleSheet.create({
-  page: { fontFamily: 'Plex', paddingTop: 130, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
+  // زدنا المساحة العلوية المحجوزة لضمان عدم ازدحام أول صف بالجدول مع عناوين الأعمدة الثابتة
+  page: { fontFamily: 'Plex', paddingTop: 148, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
 
   fixedHeaderBlock: { position: 'absolute', top: 14, left: 24, right: 24 },
-  schoolName: { fontFamily: 'Plex-Bold', fontSize: 14, color: '#14261e', textAlign: 'center', lineHeight: 1.3 },
-  reportTitle: { fontFamily: 'Plex-Bold', fontSize: 14, color: '#a10000', textAlign: 'center', marginTop: 6, lineHeight: 1.3 },
-  metaLine: { fontSize: 9, color: '#555', textAlign: 'center', marginTop: 3, lineHeight: 1.3 },
-  scopeLine: { fontSize: 9, color: '#0b7a4b', fontFamily: 'Plex-Bold', textAlign: 'center', marginTop: 4 },
-  countLine: { fontSize: 9, color: '#a10000', textAlign: 'center', marginTop: 6, marginBottom: 8, fontFamily: 'Plex-Bold' },
+  // اسم المدرسة أصغر بدرجة واحدة من العنوان الأحمر (13 بدل 14)، مع مسافة أكبر أسفله
+  schoolName: { fontFamily: 'Plex-Bold', fontSize: 13, color: '#14261e', textAlign: 'center', lineHeight: 1.3 },
+  reportTitle: { fontFamily: 'Plex-Bold', fontSize: 14, color: '#a10000', textAlign: 'center', marginTop: 10, lineHeight: 1.3 },
+  metaLine: { fontSize: 9, color: '#555', textAlign: 'center', marginTop: 4, lineHeight: 1.3 },
+  scopeLine: { fontSize: 9, color: '#0b7a4b', fontFamily: 'Plex-Bold', textAlign: 'center', marginTop: 5 },
+  countLine: { fontSize: 9, color: '#a10000', textAlign: 'center', marginTop: 7, marginBottom: 10, fontFamily: 'Plex-Bold' },
 
-  tableHeaderRow: { flexDirection: 'row-reverse', backgroundColor: HEADER_BG, paddingVertical: 5 },
+  tableHeaderRow: { flexDirection: 'row-reverse', backgroundColor: HEADER_BG, paddingVertical: 6 },
   headerCell: {
     fontFamily: 'Plex-Bold', fontSize: 8.5, textAlign: 'center', color: '#ffffff',
     borderLeftWidth: 0.75, borderLeftColor: HEADER_DIVIDER, paddingHorizontal: 3,
   },
   headerCellFirst: { textAlign: 'right', paddingRight: 6 },
 
+  // زيادة طفيفة بالارتفاع الأدنى والحشوة الرأسية لأول صف وكل الصفوف، لتفادي شعور الازدحام
   row: {
-    flexDirection: 'row-reverse', minHeight: 20, alignItems: 'center',
+    flexDirection: 'row-reverse', minHeight: 24, alignItems: 'center',
     borderLeftWidth: 1, borderRightWidth: 1, borderBottomWidth: 0.75, borderColor: ROW_BORDER,
   },
   rowEven: { backgroundColor: '#fafafa' },
-  cell: { fontSize: 8, textAlign: 'right', paddingHorizontal: 4, paddingVertical: 3, borderLeftWidth: 0.75, borderLeftColor: COL_BORDER },
+  cell: { fontSize: 8, textAlign: 'right', paddingHorizontal: 5, paddingVertical: 5, borderLeftWidth: 0.75, borderLeftColor: COL_BORDER },
 
   repeatedBadge: {
     backgroundColor: '#fdecea', borderColor: '#c62828', borderWidth: 1, borderRadius: 4,
