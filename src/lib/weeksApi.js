@@ -50,14 +50,27 @@ export async function updateWeek(schoolId, weekId, { name, type, enrichmentLink 
   });
 }
 
-// محفوظة للتوافق مع أي استخدام سابق — تحذف وثيقة الأسبوع فقط دون مهاراته وتقييماته.
-// يُفضَّل استخدام deleteWeekWithData بدلًا منها لضمان عدم بقاء بيانات يتيمة.
+// محفوظة للتوافق مع أي استخدام سابق — تحذف وثيقة الأسبوع فقط دون بياناته التابعة.
+// يُفضَل استخدام deleteWeekWithData بدلًا منها لضمان عدم بقاء بيانات يتيمة.
 export async function deleteWeek(schoolId, weekId) {
   await deleteDoc(doc(db, 'schools', schoolId, 'weeks', weekId));
 }
 
-// حذف أسبوع كامل نهائيًا، مع كل مهاراته وكل التقييمات المسجَّلة على تلك المهارات
-// لكل الطالبات — يُستخدم بعد تأكيد صريح من المعلمة، لأن العملية لا رجعة فيها.
+// عدد الإجراءات (العلاجية/الإثرائية) النشطة المرتبطة بهذا الأسبوع — تُستخدم لبناء
+// رسالة تنبيه واضحة قبل الحذف، بدون حذف الإجراءات نفسها (سجلات أعمق قد ترتبط بعدة أسابيع)
+export async function countActiveActionsForWeek(schoolId, weekId) {
+  const q = query(
+    collection(db, 'schools', schoolId, 'actions'),
+    where('triggerWeekIds', 'array-contains', weekId),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.filter((d) => d.data().status === 'active').length;
+}
+
+// حذف أسبوع كامل نهائيًا، مع كل مهاراته، كل التقييمات المسجَلة على تلك المهارات لكل
+// الطالبات، والتوصيات الأسبوعية المخصّصة لهذا الأسبوع — يُستخدم بعد تأكيد صريح من
+// المعلمة، لأن العملية لا رجعة فيها. الإجراءات العلاجية/الإثرائية النشطة لا تُحذف
+// (تبقى سجلات صالحة قد ترتبط بأسابيع أخرى أيضًا).
 export async function deleteWeekWithData(schoolId, weekId) {
   const skills = await listSkillsForWeek(schoolId, weekId);
 
@@ -73,6 +86,13 @@ export async function deleteWeekWithData(schoolId, weekId) {
     // eslint-disable-next-line no-await-in-loop
     await deleteDoc(doc(db, 'schools', schoolId, 'skills', skill.id));
   }
+
+  const recommendationsQ = query(
+    collection(db, 'schools', schoolId, 'weekRecommendations'),
+    where('weekId', '==', weekId),
+  );
+  const recommendationsSnap = await getDocs(recommendationsQ);
+  await Promise.all(recommendationsSnap.docs.map((d) => deleteDoc(d.ref)));
 
   await deleteDoc(doc(db, 'schools', schoolId, 'weeks', weekId));
 }
