@@ -87,9 +87,9 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
     setDeletingWeekId(week.id);
     try {
       const activeActionsCount = await countActiveActionsForWeek(schoolId, week.id);
-      let message = `متأكدة تبين تحذفين "${week.name}" (${TYPE_LABELS[week.type]})؟ سيتم حذف كل المهارات والتقييمات والتوصيات المسجَّلة بهذا الأسبوع نهائيًا، ولا يمكن التراجع عن هذا الإجراء.`;
+      let message = `سيتم حذف "${week.name}" (${TYPE_LABELS[week.type]}) مع كل المهارات والتقييمات والتوصيات المسجَّلة بهذا الأسبوع نهائيًا، ولا يمكن التراجع عن هذا الإجراء. هل الرغبة في المتابعة مؤكدة؟`;
       if (activeActionsCount > 0) {
-        message += `\n\nتنبيه: يوجد ${activeActionsCount} إجراء (علاجي/إثرائي) نشط مرتبط بهذا الأسبوع — سيبقى هذا الإجراء كما هو دون حذف.`;
+        message += `\n\nتنبيه: يوجد ${activeActionsCount} إجراء (علاجي/إثرائي) نشط مرتبط بهذا الأسبوع، وسيبقى هذا الإجراء كما هو دون حذف.`;
       }
       const confirmed = window.confirm(message);
       if (!confirmed) {
