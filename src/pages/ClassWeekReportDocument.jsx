@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, Image, StyleSheet, Font, Link } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Font, Link } from '@react-pdf/renderer';
 
 Font.register({
   family: 'Plex',
@@ -22,15 +22,16 @@ const ROW_BORDER = '#e0e0e0';
 const COL_BORDER = '#cfcfcf';
 
 const styles = StyleSheet.create({
-  page: { fontFamily: 'Plex', paddingTop: 105, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
+  page: { fontFamily: 'Plex', paddingTop: 168, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
 
-  // القالب الجاهز (الشعار والحدود) — صورة خلفية ثابتة تغطي الصفحة كاملة، تتكرر تلقائيًا
-  templateBg: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
-
-  fixedHeaderBlock: { position: 'absolute', top: 14, left: 24, right: 24 },
-  schoolName: { fontFamily: 'Plex-Bold', fontSize: 13, color: '#14261e', textAlign: 'center', lineHeight: 1.3 },
-  reportTitle: { fontFamily: 'Plex-Bold', fontSize: 14, color: '#0b7a4b', textAlign: 'center', marginTop: 10, lineHeight: 1.3 },
-  metaLine: { fontSize: 9, color: '#555', textAlign: 'center', marginTop: 4, lineHeight: 1.3 },
+  fixedHeaderBlock: {
+    position: 'absolute', top: 14, left: 24, right: 24,
+  },
+  schoolName: { fontFamily: 'Plex-Bold', fontSize: 15, color: '#14261e', textAlign: 'center', lineHeight: 1.3 },
+  headerLine: { fontSize: 9, color: '#555', textAlign: 'center', marginTop: 3, lineHeight: 1.3 },
+  reportTitle: { fontFamily: 'Plex-Bold', fontSize: 14, color: '#0b7a4b', textAlign: 'center', marginTop: 8, marginBottom: 3 },
+  metaLine: { fontSize: 8, color: '#666', textAlign: 'center', marginBottom: 2 },
+  linkText: { color: '#0b7a4b', textDecoration: 'underline' },
   statsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 8, fontSize: 8 },
 
   columnHeaderRow: {
@@ -103,18 +104,15 @@ export default function ClassWeekReportDocument({ data, reportTypeLabel }) {
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={styles.page}>
-        {/* القالب الجاهز يُرسم أولًا (خلفية)، وكل شي ثاني يُرسم فوقه */}
-        <Image src="templates/report-landscape.png" style={styles.templateBg} fixed />
-
         <View style={styles.fixedHeaderBlock} fixed>
           <Text style={styles.schoolName}>{data.schoolName}</Text>
-          <Text style={styles.metaLine}>المادة: {data.subject || 'غير محددة'}</Text>
-          <Text style={styles.metaLine}>{data.weekName}</Text>
+          <Text style={styles.headerLine}>المادة: {data.subject || 'غير محددة'}</Text>
+          <Text style={styles.headerLine}>{data.weekName}</Text>
 
           <Text style={styles.reportTitle}>{reportTypeLabel}</Text>
           {data.enrichmentLink && (
             <Text style={styles.metaLine}>
-              الرابط الإثرائي: <Link src={data.enrichmentLink} style={{ color: '#0b7a4b' }}>{data.enrichmentLink}</Link>
+              الرابط الإثرائي: <Link src={data.enrichmentLink} style={styles.linkText}>{data.enrichmentLink}</Link>
             </Text>
           )}
           <View style={styles.statsRow}>
