@@ -104,7 +104,7 @@ export default function ClassDetail({ schoolId, classId, allClasses, onBack }) {
   }
 
   async function handleDelete(studentId, name) {
-    if (!window.confirm(`متأكدة تبين تحذفين "${name}"؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
+    if (!window.confirm(`سيتم حذف الطالبة "${name}" نهائيًا، ولا يمكن التراجع عن هذا الإجراء. هل الرغبة في المتابعة مؤكدة؟`)) return;
     setError('');
     try {
       await deleteStudent(schoolId, studentId);
@@ -124,12 +124,12 @@ export default function ClassDetail({ schoolId, classId, allClasses, onBack }) {
     }
   }
 
-  if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جاري التحميل</p>;
+  if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
   return (
     <div style={{ maxWidth: 600, margin: '20px auto', padding: 16 }} dir="rtl">
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#0b7a4b', marginBottom: 10 }}>
-        ← رجوع لقائمة الفصول
+        ← العودة إلى قائمة الفصول
       </button>
       <h1>{cls?.name}</h1>
 
@@ -164,14 +164,14 @@ export default function ClassDetail({ schoolId, classId, allClasses, onBack }) {
 
       <h3>الطالبات ({students.length})</h3>
       {students.length === 0 ? (
-        <p style={{ color: '#666' }}>ما فيه طالبات بهذا الفصل بعد.</p>
+        <p style={{ color: '#666' }}>لا توجد طالبات بهذا الفصل بعد.</p>
       ) : (
         students.map((s) => (
           <div key={s.id} style={{ border: '1px solid #eee', borderRadius: 8, padding: 10, marginBottom: 8 }}>
             {editingId === s.id ? (
               <div>
                 <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="الاسم" style={{ width: '100%', padding: 8, marginBottom: 6 }} />
-                <input type="text" value={editId} onChange={(e) => setEditId(e.target.value)} placeholder="سجل مدني جديد (اتركيه فاضي لعدم التغيير)" style={{ width: '100%', padding: 8, marginBottom: 6 }} />
+                <input type="text" value={editId} onChange={(e) => setEditId(e.target.value)} placeholder="سجل مدني جديد (اتركيه فارغًا لعدم التغيير)" style={{ width: '100%', padding: 8, marginBottom: 6 }} />
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button onClick={() => handleSaveEdit(s.id)} style={{ padding: '6px 12px', background: '#0b7a4b', color: '#fff', border: 'none', borderRadius: 6 }}>حفظ</button>
                   <button onClick={() => setEditingId(null)} style={{ padding: '6px 12px', background: '#f2f2f2', border: 'none', borderRadius: 6 }}>إلغاء</button>
