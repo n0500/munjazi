@@ -169,7 +169,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
 
   async function handleDeleteSkill(skill) {
     const confirmed = window.confirm(
-      `متأكدة تبين تحذفين مهارة "${skill.title}"؟ سيتم حذف جميع التقييمات المسجَّلة عليها لكل الطالبات، ولا يمكن التراجع عن هذا الإجراء.`,
+      `سيتم حذف مهارة "${skill.title}" مع جميع التقييمات المسجَلة عليها لكل الطالبات نهائيًا، ولا يمكن التراجع عن هذا الإجراء. هل الرغبة في المتابعة مؤكدة؟`,
     );
     if (!confirmed) return;
     setError('');
@@ -238,7 +238,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
   async function handleRecommendationSelect(studentId, status, value) {
     setError('');
     if (value === NEW_RECOMMENDATION_VALUE) {
-      const text = window.prompt('اكتبي نص التوصية الجديدة:');
+      const text = window.prompt('يُرجى كتابة نص التوصية الجديدة:');
       if (!text || !text.trim()) return;
       try {
         if (status) await addCustomRecommendation(schoolId, teacherUid, status, text);
@@ -354,7 +354,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
             <button onClick={handleCheckActions} disabled={checkingActions} style={{ padding: '8px 14px', background: colors.amberTint, border: `1px solid ${colors.amberBorder}`, color: colors.amber, borderRadius: radius.button, fontSize: 13 }}>
               {checkingActions ? '...' : 'فحص فوري الآن'}
             </button>
-            <span style={{ fontSize: 11, color: colors.textMuted }}>الفحص يشتغل تلقائيًا بعد كل تحديث للتقييمات</span>
+            <span style={{ fontSize: 11, color: colors.textMuted }}>يعمل الفحص تلقائيًا بعد كل تحديث للتقييمات</span>
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
             <thead>
