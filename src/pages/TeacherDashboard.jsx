@@ -76,7 +76,7 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
   // (الأسابيع، المهارات، التقييمات) تبقى محفوظة بالكامل كما هي، غير متأثرة إطلاقًا
   async function handleUnlink(assignment) {
     const confirmed = window.confirm(
-      `متأكدة تبين تلغين إسنادك لفصل "${classNameFor(assignment.classId)}"${assignment.subject ? ` (${assignment.subject})` : ''}؟ لن يظهر هذا الفصل بلوحتك بعد الآن، لكن كل التقييمات والبيانات السابقة تبقى محفوظة بالنظام. تقدرين ترجعين تربطينه من جديد لاحقًا لو احتجتِ.`,
+      `سيتم إلغاء إسناد فصل "${classNameFor(assignment.classId)}"${assignment.subject ? ` (${assignment.subject})` : ''}، ولن يظهر هذا الفصل باللوحة بعد الآن. تبقى كل التقييمات والبيانات السابقة محفوظة بالنظام، ويمكن ربط الفصل من جديد لاحقًا عند الحاجة. هل الرغبة في المتابعة مؤكدة؟`,
     );
     if (!confirmed) return;
     setError('');
