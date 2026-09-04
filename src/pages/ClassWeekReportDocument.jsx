@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, Font, Link } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Image, StyleSheet, Font, Link } from '@react-pdf/renderer';
 
 Font.register({
   family: 'Plex',
@@ -23,6 +23,9 @@ const COL_BORDER = '#cfcfcf';
 
 const styles = StyleSheet.create({
   page: { fontFamily: 'Plex', paddingTop: 168, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
+
+  // شعار صغير ثابت بزاوية الصفحة — عنصر منفصل تمامًا عن كتلة النص، بدون أي تعارض معها
+  logo: { position: 'absolute', top: 14, right: 24, width: 36, height: 36 },
 
   fixedHeaderBlock: {
     position: 'absolute', top: 14, left: 24, right: 24,
@@ -104,6 +107,8 @@ export default function ClassWeekReportDocument({ data, reportTypeLabel }) {
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={styles.page}>
+        <Image src="logo.png" style={styles.logo} fixed />
+
         <View style={styles.fixedHeaderBlock} fixed>
           <Text style={styles.schoolName}>{data.schoolName}</Text>
           <Text style={styles.headerLine}>المادة: {data.subject || 'غير محددة'}</Text>
