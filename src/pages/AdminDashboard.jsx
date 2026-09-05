@@ -15,6 +15,7 @@ import { listSchoolTeachers } from '../lib/teachersApi';
 import { listClassStudents } from '../lib/studentsApi';
 import { getLatestWeekSummaryLight } from '../lib/overviewApi';
 import { listActionsForClass } from '../lib/actionEngine';
+import { exportSchoolBackupAsExcelBlob, downloadBlobAsFile } from '../lib/backupApi';
 import ClassDetail from './ClassDetail';
 import ClassReport from './ClassReport';
 import PendingAckReportDocument from './PendingAckReportDocument';
@@ -26,6 +27,7 @@ const TABS = [
   { key: 'teachers', label: 'المعلمات' },
   { key: 'tracking', label: 'متابعة الرصد' },
   { key: 'pendingAck', label: 'اطلاع أولياء الأمور' },
+  { key: 'backup', label: 'النسخة الاحتياطية' },
 ];
 
 function daysSince(timestamp) {
@@ -96,6 +98,9 @@ export default function AdminDashboard({ schoolId }) {
 
   const [pendingAckScope, setPendingAckScope] = useState('all');
   const [pendingAckGenerating, setPendingAckGenerating] = useState(false);
+
+  const [backupGenerating, setBackupGenerating] = useState(false);
+  const [backupSuccessMsg, setBackupSuccessMsg] = useState('');
 
   async function refresh() {
     setLoading(true);
@@ -373,6 +378,22 @@ export default function AdminDashboard({ schoolId }) {
       setError(err.message || 'تعذّر توليد التقرير.');
     } finally {
       setPendingAckGenerating(false);
+    }
+  }
+
+  async function handleGenerateBackup() {
+    setError('');
+    setBackupSuccessMsg('');
+    setBackupGenerating(true);
+    try {
+      const blob = await exportSchoolBackupAsExcelBlob(schoolId);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      downloadBlobAsFile(blob, `نسخة-احتياطية-${school?.name || 'المدرسة'}-${dateStr}.xlsx`);
+      setBackupSuccessMsg('تم تصدير النسخة الاحتياطية بنجاح.');
+    } catch (err) {
+      setError(err.message || 'تعذّر تصدير النسخة الاحتياطية.');
+    } finally {
+      setBackupGenerating(false);
     }
   }
 
@@ -678,6 +699,37 @@ export default function AdminDashboard({ schoolId }) {
               {pendingAckGenerating ? '...جارٍ التوليد' : 'توليد التقرير وتحميله'}
             </button>
           </div>
+        </>
+      )}
+
+      {activeTab === 'backup' && (
+        <>
+          <div
+            style={{
+              background: colors.amberTint, border: `1px solid ${colors.amberBorder}`, color: colors.amber,
+              borderRadius: radius.card, padding: spacing.md, marginBottom: spacing.lg, fontSize: 13, lineHeight: 1.7,
+            }}
+          >
+            <strong>تنبيه أمني مهم:</strong> يحتوي الملف الناتج على بيانات حساسة، من ضمنها أرقام السجلات المدنية لجميع الطالبات. يُرجى حفظ الملف بمكان آمن على الجهاز فقط، وعدم مشاركته أو رفعه لأي خدمة تخزين سحابي غير موثوقة.
+          </div>
+
+          <p style={{ color: colors.textMuted, fontSize: 13, marginBottom: spacing.lg }}>
+            يصدّر هذا القسم ملف إكسل واحد يحتوي على نسخة كاملة من جميع بيانات المدرسة، موزّعة على أوراق عمل منفصلة (الفصول، الطالبات، الأسابيع الدراسية، التقييمات، الإجراءات، الخطط العلاجية، وحسابات المعلمات). عملية التصدير يدوية، ويُنصَح بتكرارها بشكل دوري حسب الحاجة.
+          </p>
+
+          {backupSuccessMsg && (
+            <div style={{ background: colors.primaryTint, color: '#0b5c33', padding: 10, borderRadius: radius.button, marginBottom: spacing.md, fontSize: 13 }}>
+              ✓ {backupSuccessMsg}
+            </div>
+          )}
+
+          <button
+            onClick={handleGenerateBackup}
+            disabled={backupGenerating}
+            style={{ padding: '10px 16px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button }}
+          >
+            {backupGenerating ? '...جارٍ التصدير' : 'تصدير نسخة احتياطية (إكسل)'}
+          </button>
         </>
       )}
     </div>
