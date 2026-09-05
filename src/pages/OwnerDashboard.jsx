@@ -97,16 +97,16 @@ export default function OwnerDashboard() {
           <div style={{ marginTop: spacing.md, background: colors.primaryTint, padding: spacing.sm, borderRadius: radius.button }}>
             تم الإنشاء ✅ — رمز المدرسة: <strong style={{ fontSize: 18 }}>{lastCreatedCode}</strong>
             <br />
-            <small>سلّمي هذا الرمز لإدارة المدرسة عشان تنشئ حسابها.</small>
+            <small>يُرجى تسليم هذا الرمز لإدارة المدرسة لإنشاء حسابها.</small>
           </div>
         )}
       </form>
 
       <h3 style={{ fontFamily: font.family }}>المدارس ({schools.length})</h3>
       {loading ? (
-        <p>...جاري التحميل</p>
+        <p>...جارٍ التحميل</p>
       ) : schools.length === 0 ? (
-        <p>ما فيه مدارس بعد.</p>
+        <p>لا توجد مدارس بعد.</p>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
