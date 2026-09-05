@@ -137,7 +137,7 @@ export default function Login() {
             </p>
             {tab === 'admin' && (
               <p style={{ textAlign: 'center', marginTop: 4 }}>
-                <button type="button" onClick={() => setOwnerMode(true)} style={linkStyleMuted}>يمكن لحساب Admin تسجيل الدخول من هنا أيضًا</button>
+                <button type="button" onClick={() => setOwnerMode(true)} style={linkStyleMuted}>دخول حساب المالك</button>
               </p>
             )}
           </form>
