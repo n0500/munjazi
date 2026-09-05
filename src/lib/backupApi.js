@@ -1,4 +1,5 @@
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import * as XLSX from 'xlsx';
 import { db } from './firebase';
 
 // المجموعات الفرعية الموجودة تحت كل مدرسة — هذي القائمة الكاملة لكل بيانات المدرسة
@@ -17,6 +18,25 @@ const SCHOOL_SUBCOLLECTIONS = [
   'remediationPlans',
   'remediationFollowUps',
 ];
+
+// أسماء عربية مختصرة لكل ورقة عمل بملف الإكسل (بحد أقصى 31 حرفًا حسب قيود إكسل)
+const SHEET_NAMES_AR = {
+  classes: 'الفصول',
+  classTeacherAssignments: 'إسناد المعلمات',
+  students: 'الطالبات',
+  studentPrivate: 'بيانات حساسة',
+  weeks: 'الأسابيع الدراسية',
+  skills: 'المهارات',
+  assessments: 'التقييمات',
+  weekRecommendations: 'توصيات أسبوعية',
+  actions: 'الإجراءات',
+  actionTemplates: 'قوالب الإجراءات',
+  teacherRecommendations: 'توصيات المعلمات',
+  remediationPlans: 'خطط علاجية',
+  remediationFollowUps: 'متابعات الخطط',
+  users: 'حسابات المستخدمين',
+  studentsByNationalId: 'فهرس السجل المدني',
+};
 
 // يحوّل أي قيمة Timestamp من Firestore إلى نص تاريخ قابل للتخزين بصيغة JSON عادية
 function serializeValue(value) {
@@ -69,14 +89,57 @@ export async function exportSchoolBackup(schoolId) {
   };
 }
 
-export function downloadBackupJson(backupData, filenamePrefix) {
-  const json = JSON.stringify(backupData, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
+// يحوّل حقلًا واحدًا لصيغة تعرضها إكسل بشكل مقروء (بدل [object Object] للمصفوفات/الكائنات المتداخلة)
+function flattenRowForSheet(row) {
+  const out = {};
+  Object.entries(row).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      const allPrimitive = value.every((v) => typeof v !== 'object' || v === null);
+      out[key] = allPrimitive ? value.join('، ') : JSON.stringify(value);
+    } else if (value && typeof value === 'object') {
+      out[key] = JSON.stringify(value);
+    } else {
+      out[key] = value;
+    }
+  });
+  return out;
+}
+
+function safeSheetName(name) {
+  return name.slice(0, 31);
+}
+
+// يبني ملف إكسل كامل من بيانات النسخة الاحتياطية — ورقة عمل منفصلة لكل نوع بيانات
+export async function exportSchoolBackupAsExcelBlob(schoolId) {
+  const data = await exportSchoolBackup(schoolId);
+  const wb = XLSX.utils.book_new();
+
+  const summaryRows = [
+    { الحقل: 'اسم المدرسة', القيمة: data.school.name || '' },
+    { الحقل: 'رمز المدرسة', القيمة: data.school.schoolCode || '' },
+    { الحقل: 'اسم المديرة', القيمة: data.school.principalName || '' },
+    { الحقل: 'تاريخ التصدير', القيمة: data.exportedAt },
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'ملخص عام');
+
+  const arrayKeys = Object.keys(data).filter((k) => Array.isArray(data[k]));
+  arrayKeys.forEach((key) => {
+    const rows = data[key].map(flattenRowForSheet);
+    const sheet = rows.length > 0
+      ? XLSX.utils.json_to_sheet(rows)
+      : XLSX.utils.aoa_to_sheet([['لا توجد بيانات بهذا القسم']]);
+    XLSX.utils.book_append_sheet(wb, sheet, safeSheetName(SHEET_NAMES_AR[key] || key));
+  });
+
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([wbout], { type: 'application/octet-stream' });
+}
+
+export function downloadBlobAsFile(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const dateStr = new Date().toISOString().slice(0, 10);
-  a.download = `${filenamePrefix}-${dateStr}.json`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
