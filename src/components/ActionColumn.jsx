@@ -74,7 +74,7 @@ function ActionModal({ schoolId, teacherUid, studentName, action, onClose, onCha
 
   async function handleTemplateSelect(value) {
     if (value === NEW_TEMPLATE_VALUE) {
-      const newText = window.prompt('اكتبي نص الإجراء الجديد:');
+      const newText = window.prompt('يرجى كتابة نص الإجراء الجديد:');
       if (!newText || !newText.trim()) return;
       try {
         await addActionTemplate(schoolId, { type: action.type, text: newText, teacherUid });
