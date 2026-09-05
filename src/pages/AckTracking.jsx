@@ -123,7 +123,7 @@ export default function AckTracking({ schoolId, teacherUid, onBack }) {
             borderRadius: radius.button, padding: spacing.md, marginBottom: spacing.lg, fontSize: 13,
           }}
         >
-          <strong>⚠ أولوية عاجلة:</strong> {repeatedPendingCount} من الحالات فيها مهارة متكررة الضعف (استمرت لأكثر من أسبوع) ولي أمرها لسه ما اطّلع — تستاهل متابعة مباشرة.
+          <strong>⚠ أولوية عاجلة:</strong> توجد {repeatedPendingCount} من الحالات تتضمن مهارة متكررة الضعف (استمرت لأكثر من أسبوع)، ولم يطّلع وليّ أمرها عليها بعد — وتستحق متابعة مباشرة.
         </div>
       )}
 
