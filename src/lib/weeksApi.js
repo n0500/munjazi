@@ -4,6 +4,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  getDoc,
   getDocs,
   query,
   where,
@@ -51,7 +52,7 @@ export async function updateWeek(schoolId, weekId, { name, type, enrichmentLink 
 }
 
 // محفوظة للتوافق مع أي استخدام سابق — تحذف وثيقة الأسبوع فقط دون بياناته التابعة.
-// يُفضَل استخدام deleteWeekWithData بدلًا منها لضمان عدم بقاء بيانات يتيمة.
+// يُفضَّل استخدام deleteWeekWithData بدلًا منها لضمان عدم بقاء بيانات يتيمة.
 export async function deleteWeek(schoolId, weekId) {
   await deleteDoc(doc(db, 'schools', schoolId, 'weeks', weekId));
 }
@@ -67,7 +68,7 @@ export async function countActiveActionsForWeek(schoolId, weekId) {
   return snap.docs.filter((d) => d.data().status === 'active').length;
 }
 
-// حذف أسبوع كامل نهائيًا، مع كل مهاراته، كل التقييمات المسجَلة على تلك المهارات لكل
+// حذف أسبوع كامل نهائيًا، مع كل مهاراته، كل التقييمات المسجَّلة على تلك المهارات لكل
 // الطالبات، والتوصيات الأسبوعية المخصّصة لهذا الأسبوع — يُستخدم بعد تأكيد صريح من
 // المعلمة، لأن العملية لا رجعة فيها. الإجراءات العلاجية/الإثرائية النشطة لا تُحذف
 // (تبقى سجلات صالحة قد ترتبط بأسابيع أخرى أيضًا).
@@ -104,7 +105,7 @@ export async function getWeek(schoolId, weekId) {
   return { id: found.id, ...found.data() };
 }
 
-// ينسخ كل مهارات وتقييمات أسبوع مصدر إلى أسبوع جديد بالكامل
+// ينسخ كل مهارات وتقييمات أسبوع مصدر واحد إلى أسبوع جديد بالكامل
 export async function copyWeek(schoolId, sourceWeekId, { classId, teacherUid, name, type }) {
   const { id: newWeekId } = await createWeek(schoolId, {
     classId,
@@ -125,6 +126,53 @@ export async function copyWeek(schoolId, sourceWeekId, { classId, teacherUid, na
     });
     // eslint-disable-next-line no-await-in-loop
     const sourceAssessments = await listAssessmentsForSkill(schoolId, skill.id);
+    // eslint-disable-next-line no-await-in-loop
+    await Promise.all(
+      Object.entries(sourceAssessments).map(([studentId, data]) =>
+        setAssessment(schoolId, {
+          skillId: newSkillId,
+          weekId: newWeekId,
+          classId,
+          teacherUid,
+          studentId,
+          status: data.status,
+          recommendationText: data.recommendationText || '',
+        }),
+      ),
+    );
+  }
+
+  return { id: newWeekId };
+}
+
+// ينسخ مهارات محدَّدة يدويًا (قد تكون من عدة أسابيع مصدر مختلفة) إلى أسبوع جديد واحد،
+// مع نسخ تقييمات كل طالبة على تلك المهارات كما هي — يُستخدم لتجميع مهارات متفرّقة
+// من أسابيع قياس سابقة بأسبوع معالجة شامل واحد لإعادة تقييمها
+export async function copySelectedSkillsToNewWeek(schoolId, { classId, teacherUid, name, type, selectedSkillIds }) {
+  const { id: newWeekId } = await createWeek(schoolId, {
+    classId,
+    teacherUid,
+    name,
+    type,
+    enrichmentLink: '',
+  });
+
+  for (const sourceSkillId of selectedSkillIds) {
+    // eslint-disable-next-line no-await-in-loop
+    const skillSnap = await getDoc(doc(db, 'schools', schoolId, 'skills', sourceSkillId));
+    if (!skillSnap.exists()) continue;
+    const skillTitle = skillSnap.data().title;
+
+    // eslint-disable-next-line no-await-in-loop
+    const { id: newSkillId } = await createSkill(schoolId, {
+      weekId: newWeekId,
+      classId,
+      teacherUid,
+      title: skillTitle,
+    });
+
+    // eslint-disable-next-line no-await-in-loop
+    const sourceAssessments = await listAssessmentsForSkill(schoolId, sourceSkillId);
     // eslint-disable-next-line no-await-in-loop
     await Promise.all(
       Object.entries(sourceAssessments).map(([studentId, data]) =>
