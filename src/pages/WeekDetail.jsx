@@ -169,7 +169,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
 
   async function handleDeleteSkill(skill) {
     const confirmed = window.confirm(
-      `سيتم حذف مهارة "${skill.title}" مع جميع التقييمات المسجَلة عليها لكل الطالبات نهائيًا، ولا يمكن التراجع عن هذا الإجراء. هل الرغبة في المتابعة مؤكدة؟`,
+      `سيتم حذف مهارة "${skill.title}" مع جميع التقييمات المسجَّلة عليها لكل الطالبات نهائيًا، ولا يمكن التراجع عن هذا الإجراء. هل الرغبة في المتابعة مؤكدة؟`,
     );
     if (!confirmed) return;
     setError('');
@@ -383,6 +383,11 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
                     ) : (
                       <>
                         <div style={{ fontWeight: 'normal' }}>{s.title}</div>
+                        {s.sourceWeekName && (
+                          <div style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>
+                            ({s.sourceWeekName} — {TYPE_LABELS[s.sourceWeekType] || s.sourceWeekType})
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
                           <button onClick={() => handleSetAllMastered(s.id)} style={{ padding: '2px 6px', fontSize: 10, background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: 6 }}>
                             تعيين الكل: متقنة
