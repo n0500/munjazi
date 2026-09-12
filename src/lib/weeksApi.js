@@ -105,7 +105,9 @@ export async function getWeek(schoolId, weekId) {
   return { id: found.id, ...found.data() };
 }
 
-// ينسخ كل مهارات وتقييمات أسبوع مصدر واحد إلى أسبوع جديد بالكامل
+// ينسخ كل مهارات وتقييمات أسبوع مصدر واحد إلى أسبوع جديد بالكامل — بدون تخزين معلومات
+// المصدر على المهارات، بما أن كل مهارات هذا الأسبوع تأتي أصلًا من نفس المصدر الواحد
+// المختار يدويًا، فلا حاجة لعرضه مكرَّرًا تحت كل عمود لاحقًا
 export async function copyWeek(schoolId, sourceWeekId, { classId, teacherUid, name, type }) {
   const { id: newWeekId } = await createWeek(schoolId, {
     classId,
@@ -146,8 +148,9 @@ export async function copyWeek(schoolId, sourceWeekId, { classId, teacherUid, na
 }
 
 // ينسخ مهارات محدَّدة يدويًا (قد تكون من عدة أسابيع مصدر مختلفة) إلى أسبوع جديد واحد،
-// مع نسخ تقييمات كل طالبة على تلك المهارات كما هي — يُستخدم لتجميع مهارات متفرّقة
-// من أسابيع قياس سابقة بأسبوع معالجة شامل واحد لإعادة تقييمها
+// مع نسخ تقييمات كل طالبة على تلك المهارات كما هي. بما أن كل مهارة قد تأتي من أسبوع
+// مختلف، يُخزَّن اسم ونوع الأسبوع المصدر الأصلي على كل مهارة جديدة — يُستخدم لعرضه
+// لاحقًا برأس عمودها بجدول الرصد، للتمييز بين مصادر المهارات المتنوّعة بهذا التجميع تحديدًا
 export async function copySelectedSkillsToNewWeek(schoolId, { classId, teacherUid, name, type, selectedSkillIds }) {
   const { id: newWeekId } = await createWeek(schoolId, {
     classId,
@@ -157,18 +160,32 @@ export async function copySelectedSkillsToNewWeek(schoolId, { classId, teacherUi
     enrichmentLink: '',
   });
 
+  const weekCache = {};
+  async function getSourceWeek(weekId) {
+    if (!weekCache[weekId]) {
+      const weekSnap = await getDoc(doc(db, 'schools', schoolId, 'weeks', weekId));
+      weekCache[weekId] = weekSnap.exists() ? weekSnap.data() : null;
+    }
+    return weekCache[weekId];
+  }
+
   for (const sourceSkillId of selectedSkillIds) {
     // eslint-disable-next-line no-await-in-loop
     const skillSnap = await getDoc(doc(db, 'schools', schoolId, 'skills', sourceSkillId));
     if (!skillSnap.exists()) continue;
-    const skillTitle = skillSnap.data().title;
+    const skillData = skillSnap.data();
+
+    // eslint-disable-next-line no-await-in-loop
+    const sourceWeek = await getSourceWeek(skillData.weekId);
 
     // eslint-disable-next-line no-await-in-loop
     const { id: newSkillId } = await createSkill(schoolId, {
       weekId: newWeekId,
       classId,
       teacherUid,
-      title: skillTitle,
+      title: skillData.title,
+      sourceWeekName: sourceWeek?.name || '',
+      sourceWeekType: sourceWeek?.type || '',
     });
 
     // eslint-disable-next-line no-await-in-loop
