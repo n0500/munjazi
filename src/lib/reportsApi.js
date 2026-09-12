@@ -85,7 +85,6 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
         typeLabel: act.type === 'remedial' ? 'علاجي' : 'إثرائي',
         affectedSkillTitles: act.affectedSkillTitles || [],
         text: act.finalText || act.suggestedText,
-        // الرابط الإثرائي الخاص بهذا الإجراء تحديدًا (وقت تفعيله)، منفصل عن رابط الأسبوع الحالي العام
         enrichmentLink: act.enrichmentLink || '',
       }));
 
@@ -143,7 +142,15 @@ export async function buildStudentReportData(schoolId, { classId, teacherUid, st
       const assessments = await listAssessmentsForSkill(schoolId, skill.id);
       const status = assessments[student.id]?.status || null;
       if (status && statusCounts[status] !== undefined) statusCounts[status] += 1;
-      skillRows.push({ title: skill.title, status, statusLabel: status ? STATUS_LABELS[status] : '—' });
+      skillRows.push({
+        title: skill.title,
+        status,
+        statusLabel: status ? STATUS_LABELS[status] : '—',
+        // مصدر المهارة (اسم الأسبوع الأصلي ونوعه) — يظهر فقط للمهارات المجمَّعة من أسابيع
+        // معالجة أنشئت عبر ميزة "تجميع مهارات محدَّدة من عدة أسابيع"
+        sourceWeekName: skill.sourceWeekName || null,
+        sourceWeekType: skill.sourceWeekType || null,
+      });
     }
     // eslint-disable-next-line no-await-in-loop
     const weekRecs = await listRecommendationsForWeek(schoolId, week.id);
@@ -214,6 +221,9 @@ export async function buildClassWeekReportData(schoolId, { classId, teacherUid, 
     weekTypeLabel,
     enrichmentLink,
     skillTitles: skills.map((s) => s.title),
+    // مصدر كل مهارة (بنفس ترتيب skillTitles) — عنصر فارغ (null) للمهارات العادية،
+    // وكائن {name, type} للمهارات المجمَّعة من أسبوع مصدر مختلف
+    skillSources: skills.map((s) => (s.sourceWeekName ? { name: s.sourceWeekName, type: s.sourceWeekType } : null)),
     rows,
     classCounts,
   };
@@ -256,6 +266,7 @@ export async function buildClassRangeReportData(schoolId, { classId, teacherUid,
       typeLabel: TYPE_LABELS[week.type],
       enrichmentLink: week.enrichmentLink || '',
       skillTitles: skills.map((s) => s.title),
+      skillSources: skills.map((s) => (s.sourceWeekName ? { name: s.sourceWeekName, type: s.sourceWeekType } : null)),
       rows,
     });
   }
