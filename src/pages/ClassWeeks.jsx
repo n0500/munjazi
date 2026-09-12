@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { listWeeksForClass, createWeek, copyWeek, deleteWeekWithData, countActiveActionsForWeek } from '../lib/weeksApi';
+import { listWeeksForClass, createWeek, copyWeek, deleteWeekWithData, countActiveActionsForWeek, copySelectedSkillsToNewWeek } from '../lib/weeksApi';
+import { listSkillsForWeek } from '../lib/skillsApi';
 import { SCHOOL_WEEK_NAMES } from '../lib/schoolWeekNames';
 import WeekDetail from './WeekDetail';
 import StudentReport from './StudentReport';
@@ -22,6 +23,13 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
   const [copyName, setCopyName] = useState('');
   const [copyType, setCopyType] = useState('remediation');
   const [copying, setCopying] = useState(false);
+
+  const [expandedWeekIds, setExpandedWeekIds] = useState(new Set());
+  const [skillsByWeek, setSkillsByWeek] = useState({});
+  const [selectedSkillIds, setSelectedSkillIds] = useState(new Set());
+  const [mergeName, setMergeName] = useState('');
+  const [mergeType, setMergeType] = useState('remediation');
+  const [merging, setMerging] = useState(false);
 
   const [selectedWeekId, setSelectedWeekId] = useState(null);
   const [showReport, setShowReport] = useState(false);
@@ -79,6 +87,57 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
       setError(err.message || 'تعذّر نسخ الأسبوع الدراسي.');
     } finally {
       setCopying(false);
+    }
+  }
+
+  async function toggleWeekExpand(weekId) {
+    setExpandedWeekIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(weekId)) next.delete(weekId);
+      else next.add(weekId);
+      return next;
+    });
+    if (!skillsByWeek[weekId]) {
+      try {
+        const rows = await listSkillsForWeek(schoolId, weekId);
+        setSkillsByWeek((prev) => ({ ...prev, [weekId]: rows }));
+      } catch (err) {
+        setError(err.message || 'تعذّر تحميل مهارات هذا الأسبوع.');
+      }
+    }
+  }
+
+  function toggleSkillSelected(skillId) {
+    setSelectedSkillIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(skillId)) next.delete(skillId);
+      else next.add(skillId);
+      return next;
+    });
+  }
+
+  async function handleMerge(e) {
+    e.preventDefault();
+    setError('');
+    if (selectedSkillIds.size === 0 || !mergeName.trim() || merging) return;
+    setMerging(true);
+    try {
+      await copySelectedSkillsToNewWeek(schoolId, {
+        classId,
+        teacherUid,
+        name: mergeName,
+        type: mergeType,
+        selectedSkillIds: Array.from(selectedSkillIds),
+      });
+      setSelectedSkillIds(new Set());
+      setExpandedWeekIds(new Set());
+      setMergeName('');
+      setMergeType('remediation');
+      await refresh();
+    } catch (err) {
+      setError(err.message || 'تعذّر تجميع المهارات المحدَّدة.');
+    } finally {
+      setMerging(false);
     }
   }
 
@@ -188,7 +247,7 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
 
       {weeks.length > 0 && (
         <div style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.lg }}>
-          <h3 style={{ marginTop: 0, fontFamily: font.family }}>نسخ من أسبوع سابق</h3>
+          <h3 style={{ marginTop: 0, fontFamily: font.family }}>نسخ من أسبوع سابق (كامل)</h3>
           <form onSubmit={handleCopy}>
             <label>الأسبوع المصدر</label>
             <select value={copySourceId} onChange={(e) => setCopySourceId(e.target.value)} style={{ width: '100%', padding: spacing.sm, marginBottom: spacing.sm }} required>
@@ -213,6 +272,71 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
               {copying ? '...' : 'نسخ'}
             </button>
           </form>
+        </div>
+      )}
+
+      {weeks.length > 0 && (
+        <div style={{ border: `1px solid ${colors.amberBorder}`, background: colors.amberTint, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.lg }}>
+          <h3 style={{ marginTop: 0, fontFamily: font.family, color: colors.amber }}>تجميع مهارات محدَّدة من عدة أسابيع</h3>
+          <p style={{ fontSize: 12, color: colors.amber, marginTop: 0, marginBottom: spacing.sm }}>
+            حددي الأسابيع أدناه لعرض مهاراتها، ثم اختاري المهارات المحدَّدة اللي تبين تجميعها بأسبوع معالجة جديد — تُنسخ مع تقييماتها كما هي.
+          </p>
+
+          {weeks.map((w) => (
+            <div key={w.id} style={{ borderBottom: `1px solid ${colors.amberBorder}`, paddingBottom: spacing.sm, marginBottom: spacing.sm }}>
+              <button
+                type="button"
+                onClick={() => toggleWeekExpand(w.id)}
+                style={{ background: 'none', border: 'none', color: colors.ink, fontWeight: 'bold', fontSize: 14, textAlign: 'right', cursor: 'pointer', fontFamily: font.family }}
+              >
+                {expandedWeekIds.has(w.id) ? '▼' : '◀'} {w.name} — {TYPE_LABELS[w.type]}
+              </button>
+
+              {expandedWeekIds.has(w.id) && (
+                <div style={{ marginTop: 6, paddingRight: 12 }}>
+                  {!skillsByWeek[w.id] ? (
+                    <p style={{ fontSize: 12, color: colors.textMuted }}>...جارٍ تحميل المهارات</p>
+                  ) : skillsByWeek[w.id].length === 0 ? (
+                    <p style={{ fontSize: 12, color: colors.textMuted }}>لا توجد مهارات بهذا الأسبوع.</p>
+                  ) : (
+                    skillsByWeek[w.id].map((skill) => (
+                      <label key={skill.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '4px 0', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedSkillIds.has(skill.id)}
+                          onChange={() => toggleSkillSelected(skill.id)}
+                        />
+                        {skill.title}
+                      </label>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {selectedSkillIds.size > 0 && (
+            <form onSubmit={handleMerge} style={{ marginTop: spacing.md, borderTop: `1px solid ${colors.amberBorder}`, paddingTop: spacing.md }}>
+              <p style={{ fontSize: 13, fontWeight: 'bold', color: colors.amber, marginBottom: spacing.sm }}>
+                {selectedSkillIds.size} مهارة محدَّدة
+              </p>
+              <label>اسم الأسبوع الجديد</label>
+              <select value={mergeName} onChange={(e) => setMergeName(e.target.value)} style={{ width: '100%', padding: spacing.sm, marginBottom: spacing.sm }} required>
+                <option value="">اختيار اسم الأسبوع</option>
+                {SCHOOL_WEEK_NAMES.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+              <label>النوع</label>
+              <select value={mergeType} onChange={(e) => setMergeType(e.target.value)} style={{ width: '100%', padding: spacing.sm, marginBottom: spacing.sm }}>
+                <option value="measurement">قياس</option>
+                <option value="remediation">معالجة</option>
+              </select>
+              <button type="submit" disabled={merging} style={{ padding: '10px 16px', background: colors.amber, color: '#fff', border: 'none', borderRadius: radius.button }}>
+                {merging ? '...جارٍ التجميع' : 'إنشاء الأسبوع من المهارات المحدَّدة'}
+              </button>
+            </form>
+          )}
         </div>
       )}
 
