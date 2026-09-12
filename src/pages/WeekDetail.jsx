@@ -45,11 +45,16 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
 
   const autoCheckTimer = useRef(null);
 
+  // يعيد بناء قائمة الإجراءات النشطة الظاهرة بعمود الإجراء لكل طالبة. الإجراء العلاجي
+  // يظهر بلا شرط طالما لا يزال نشطًا (متابعة مستمرة حتى الإغلاق اليدوي). أما الإجراء
+  // الإثرائي فيظهر فقط بالأسبوع الذي تأكَّد فيه نمط التكرار تحديدًا (lastConfirmedWeekId)،
+  // ولا يستمر بالظهور تلقائيًا بأي أسبوع جديد لاحق.
   async function refreshActions() {
     const allActions = await listActionsForClass(schoolId, classId);
     const grouped = {};
     allActions.forEach((a) => {
       if (a.status !== 'active') return;
+      if (a.type === 'enrichment' && a.lastConfirmedWeekId !== week.id) return;
       if (!grouped[a.studentId]) grouped[a.studentId] = [];
       grouped[a.studentId].push(a);
     });
