@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, Image, StyleSheet, Font, Link } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Font, Link } from '@react-pdf/renderer';
 
 Font.register({
   family: 'Plex',
@@ -24,9 +24,6 @@ const COL_BORDER = '#cfcfcf';
 const styles = StyleSheet.create({
   page: { fontFamily: 'Plex', paddingTop: 168, paddingBottom: 40, paddingHorizontal: 24, fontSize: 9 },
 
-  // شعار صغير ثابت بزاوية الصفحة — عنصر منفصل تمامًا عن كتلة النص، بدون أي تعارض معها
-  logo: { position: 'absolute', top: 14, right: 24, width: 36, height: 36 },
-
   fixedHeaderBlock: {
     position: 'absolute', top: 14, left: 24, right: 24,
   },
@@ -43,11 +40,16 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: HEADER_BG,
     paddingVertical: 5,
   },
-  headerCell: {
-    fontFamily: 'Plex-Bold', fontSize: 9, textAlign: 'center', color: '#ffffff',
+  headerCellWrap: {
     borderLeftWidth: 0.75, borderLeftColor: HEADER_DIVIDER, paddingHorizontal: 3,
   },
+  headerCell: {
+    fontFamily: 'Plex-Bold', fontSize: 9, textAlign: 'center', color: '#ffffff',
+  },
   headerCellFirst: { textAlign: 'right', paddingRight: 6 },
+  headerCellSource: {
+    fontFamily: 'Plex', fontSize: 6.5, textAlign: 'center', color: '#b9c4bf', marginTop: 1,
+  },
 
   row: {
     flexDirection: 'row-reverse', minHeight: 20, alignItems: 'center',
@@ -76,6 +78,8 @@ const styles = StyleSheet.create({
   footerColLeft: { flex: 1, textAlign: 'left' },
 });
 
+const TYPE_LABELS_AR = { measurement: 'قياس', remediation: 'معالجة' };
+
 function StatusBadge({ status, statusLabel }) {
   const s = STATUS_STYLE[status] || { bg: '#f2f2f2', text: '#666', border: '#ccc' };
   return (
@@ -103,12 +107,11 @@ function columnWidths(skillCount) {
 
 export default function ClassWeekReportDocument({ data, reportTypeLabel }) {
   const { nameW, recW, actionW, skillW } = columnWidths(data.skillTitles.length);
+  const skillSources = data.skillSources || [];
 
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={styles.page}>
-        <Image src="logo.png" style={styles.logo} fixed />
-
         <View style={styles.fixedHeaderBlock} fixed>
           <Text style={styles.schoolName}>{data.schoolName}</Text>
           <Text style={styles.headerLine}>المادة: {data.subject || 'غير محددة'}</Text>
@@ -127,12 +130,28 @@ export default function ClassWeekReportDocument({ data, reportTypeLabel }) {
           </View>
 
           <View style={styles.columnHeaderRow}>
-            <Text style={[styles.headerCell, styles.headerCellFirst, { width: `${nameW}%` }]}>الطالبة</Text>
-            {data.skillTitles.map((t, i) => (
-              <Text key={i} style={[styles.headerCell, { width: `${skillW}%` }]}>{t}</Text>
-            ))}
-            <Text style={[styles.headerCell, { width: `${recW}%` }]}>التوصية</Text>
-            <Text style={[styles.headerCell, { width: `${actionW}%` }]}>الإجراء</Text>
+            <View style={[styles.headerCellWrap, { width: `${nameW}%` }]}>
+              <Text style={[styles.headerCell, styles.headerCellFirst]}>الطالبة</Text>
+            </View>
+            {data.skillTitles.map((t, i) => {
+              const source = skillSources[i];
+              return (
+                <View key={i} style={[styles.headerCellWrap, { width: `${skillW}%` }]}>
+                  <Text style={styles.headerCell}>{t}</Text>
+                  {source && (
+                    <Text style={styles.headerCellSource}>
+                      ({source.name} — {TYPE_LABELS_AR[source.type] || source.type})
+                    </Text>
+                  )}
+                </View>
+              );
+            })}
+            <View style={[styles.headerCellWrap, { width: `${recW}%` }]}>
+              <Text style={styles.headerCell}>التوصية</Text>
+            </View>
+            <View style={[styles.headerCellWrap, { width: `${actionW}%` }]}>
+              <Text style={styles.headerCell}>الإجراء</Text>
+            </View>
           </View>
         </View>
 
