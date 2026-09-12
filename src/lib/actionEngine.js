@@ -165,12 +165,14 @@ async function upsertAction(schoolId, { classId, teacherUid, studentId, studentN
     const existingDoc = existingSnap.docs[0];
     const updates = {
       affectedSkillTitles,
+      // آخر أسبوع تأكد فيه نمط التكرار — يحدد الأسبوع الوحيد اللي يظهر فيه الإجراء
+      // الإثرائي بعمود الإجراء بجدول الرصد (بعكس العلاجي، اللي يستمر ظاهرًا بلا شرط)
+      lastConfirmedWeekId: weekId,
       followUpLog: [
         ...(existingDoc.data().followUpLog || []),
         { weekId, note: 'استمرار التكرار', date: Timestamp.now() },
       ],
     };
-    // نحدّث الرابط الإثرائي المرتبط بالإجراء لو توفّر رابط جديد بآخر أسبوع مكتشف فيه التكرار
     if (weekEnrichmentLink) updates.enrichmentLink = weekEnrichmentLink;
     await updateDoc(existingDoc.ref, updates);
     return { id: existingDoc.id, updated: true };
@@ -190,12 +192,13 @@ async function upsertAction(schoolId, { classId, teacherUid, studentId, studentN
     finalText: suggestedText,
     status: 'active',
     triggerWeekIds: [weekId],
+    // آخر أسبوع تأكد فيه النمط — عند الإنشاء يساوي أسبوع التوليد نفسه
+    lastConfirmedWeekId: weekId,
     activatedAt: serverTimestamp(),
     activatedBy: teacherUid,
     reviewDate: Timestamp.fromDate(reviewDate),
     followUpLog: [],
     parentAcknowledgment: { viewedAt: null, viewedByParentId: null },
-    // الرابط الإثرائي الخاص بهذا الإجراء تحديدًا (وقت إنشائه)، مستقل عن رابط أي أسبوع لاحق
     enrichmentLink: weekEnrichmentLink || '',
     createdAt: serverTimestamp(),
   });
@@ -225,7 +228,6 @@ export async function updateActionText(schoolId, { actionId, finalText }) {
   await updateDoc(ref, { finalText });
 }
 
-// يسمح للمعلمة بتعديل الرابط الإثرائي المرتبط بإجراء إثرائي معيّن يدويًا
 export async function updateActionEnrichmentLink(schoolId, { actionId, enrichmentLink }) {
   const ref = doc(db, 'schools', schoolId, 'actions', actionId);
   await updateDoc(ref, { enrichmentLink: enrichmentLink || '' });
@@ -243,7 +245,6 @@ export async function listActionsForStudent(schoolId, studentId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-// يجيب كل إجراءات المعلمة (عبر كل فصولها/مواد)، تُستخدم لتبويب "متابعة الاطلاع"
 export async function listActionsForTeacher(schoolId, teacherUid) {
   const q = query(collection(db, 'schools', schoolId, 'actions'), where('teacherUid', '==', teacherUid));
   const snap = await getDocs(q);
