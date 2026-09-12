@@ -51,14 +51,10 @@ export async function updateWeek(schoolId, weekId, { name, type, enrichmentLink 
   });
 }
 
-// محفوظة للتوافق مع أي استخدام سابق — تحذف وثيقة الأسبوع فقط دون بياناته التابعة.
-// يُفضَّل استخدام deleteWeekWithData بدلًا منها لضمان عدم بقاء بيانات يتيمة.
 export async function deleteWeek(schoolId, weekId) {
   await deleteDoc(doc(db, 'schools', schoolId, 'weeks', weekId));
 }
 
-// عدد الإجراءات (العلاجية/الإثرائية) النشطة المرتبطة بهذا الأسبوع — تُستخدم لبناء
-// رسالة تنبيه واضحة قبل الحذف، بدون حذف الإجراءات نفسها (سجلات أعمق قد ترتبط بعدة أسابيع)
 export async function countActiveActionsForWeek(schoolId, weekId) {
   const q = query(
     collection(db, 'schools', schoolId, 'actions'),
@@ -68,10 +64,6 @@ export async function countActiveActionsForWeek(schoolId, weekId) {
   return snap.docs.filter((d) => d.data().status === 'active').length;
 }
 
-// حذف أسبوع كامل نهائيًا، مع كل مهاراته، كل التقييمات المسجَّلة على تلك المهارات لكل
-// الطالبات، والتوصيات الأسبوعية المخصّصة لهذا الأسبوع — يُستخدم بعد تأكيد صريح من
-// المعلمة، لأن العملية لا رجعة فيها. الإجراءات العلاجية/الإثرائية النشطة لا تُحذف
-// (تبقى سجلات صالحة قد ترتبط بأسابيع أخرى أيضًا).
 export async function deleteWeekWithData(schoolId, weekId) {
   const skills = await listSkillsForWeek(schoolId, weekId);
 
@@ -105,9 +97,6 @@ export async function getWeek(schoolId, weekId) {
   return { id: found.id, ...found.data() };
 }
 
-// ينسخ كل مهارات وتقييمات أسبوع مصدر واحد إلى أسبوع جديد بالكامل — بدون تخزين معلومات
-// المصدر على المهارات، بما أن كل مهارات هذا الأسبوع تأتي أصلًا من نفس المصدر الواحد
-// المختار يدويًا، فلا حاجة لعرضه مكرَّرًا تحت كل عمود لاحقًا
 export async function copyWeek(schoolId, sourceWeekId, { classId, teacherUid, name, type }) {
   const { id: newWeekId } = await createWeek(schoolId, {
     classId,
@@ -147,10 +136,10 @@ export async function copyWeek(schoolId, sourceWeekId, { classId, teacherUid, na
   return { id: newWeekId };
 }
 
-// ينسخ مهارات محدَّدة يدويًا (قد تكون من عدة أسابيع مصدر مختلفة) إلى أسبوع جديد واحد،
-// مع نسخ تقييمات كل طالبة على تلك المهارات كما هي. بما أن كل مهارة قد تأتي من أسبوع
-// مختلف، يُخزَّن اسم ونوع الأسبوع المصدر الأصلي على كل مهارة جديدة — يُستخدم لعرضه
-// لاحقًا برأس عمودها بجدول الرصد، للتمييز بين مصادر المهارات المتنوّعة بهذا التجميع تحديدًا
+// ينسخ مهارات محدَّدة يدويًا (من أسابيع مصدر مختلفة) إلى أسبوع جديد واحد، مع نسخ
+// تقييماتها، وتوثيق اسم ونوع الأسبوع الأصلي لكل مهارة. تُجلب كل الأسابيع المصدر
+// دفعة واحدة أولًا (بدل الجلب المتكرر أثناء الحلقة)، لضمان دقة الربط بين كل مهارة
+// وأسبوعها الأصلي بشكل مباشر وواضح.
 export async function copySelectedSkillsToNewWeek(schoolId, { classId, teacherUid, name, type, selectedSkillIds }) {
   const { id: newWeekId } = await createWeek(schoolId, {
     classId,
@@ -160,36 +149,40 @@ export async function copySelectedSkillsToNewWeek(schoolId, { classId, teacherUi
     enrichmentLink: '',
   });
 
-  const weekCache = {};
-  async function getSourceWeek(weekId) {
-    if (!weekCache[weekId]) {
-      const weekSnap = await getDoc(doc(db, 'schools', schoolId, 'weeks', weekId));
-      weekCache[weekId] = weekSnap.exists() ? weekSnap.data() : null;
-    }
-    return weekCache[weekId];
-  }
+  // الخطوة 1: جلب كل وثائق المهارات المصدر دفعة واحدة
+  const skillSnaps = await Promise.all(
+    selectedSkillIds.map((skillId) => getDoc(doc(db, 'schools', schoolId, 'skills', skillId))),
+  );
+  const validSkills = skillSnaps
+    .filter((snap) => snap.exists())
+    .map((snap) => ({ id: snap.id, ...snap.data() }));
 
-  for (const sourceSkillId of selectedSkillIds) {
-    // eslint-disable-next-line no-await-in-loop
-    const skillSnap = await getDoc(doc(db, 'schools', schoolId, 'skills', sourceSkillId));
-    if (!skillSnap.exists()) continue;
-    const skillData = skillSnap.data();
+  // الخطوة 2: جلب كل وثائق الأسابيع المصدر الفريدة دفعة واحدة (بدون تكرار نفس الأسبوع)
+  const uniqueWeekIds = [...new Set(validSkills.map((s) => s.weekId))];
+  const weekSnaps = await Promise.all(
+    uniqueWeekIds.map((weekId) => getDoc(doc(db, 'schools', schoolId, 'weeks', weekId))),
+  );
+  const weekById = {};
+  weekSnaps.forEach((snap) => {
+    if (snap.exists()) weekById[snap.id] = snap.data();
+  });
 
-    // eslint-disable-next-line no-await-in-loop
-    const sourceWeek = await getSourceWeek(skillData.weekId);
+  // الخطوة 3: إنشاء كل مهارة جديدة بمصدرها الموثَّق، مع نسخ تقييماتها
+  for (const sourceSkill of validSkills) {
+    const sourceWeek = weekById[sourceSkill.weekId] || null;
 
     // eslint-disable-next-line no-await-in-loop
     const { id: newSkillId } = await createSkill(schoolId, {
       weekId: newWeekId,
       classId,
       teacherUid,
-      title: skillData.title,
-      sourceWeekName: sourceWeek?.name || '',
-      sourceWeekType: sourceWeek?.type || '',
+      title: sourceSkill.title,
+      sourceWeekName: sourceWeek ? sourceWeek.name : '',
+      sourceWeekType: sourceWeek ? sourceWeek.type : '',
     });
 
     // eslint-disable-next-line no-await-in-loop
-    const sourceAssessments = await listAssessmentsForSkill(schoolId, sourceSkillId);
+    const sourceAssessments = await listAssessmentsForSkill(schoolId, sourceSkill.id);
     // eslint-disable-next-line no-await-in-loop
     await Promise.all(
       Object.entries(sourceAssessments).map(([studentId, data]) =>
