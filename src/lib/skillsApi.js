@@ -24,8 +24,6 @@ export async function listSkillsForWeek(schoolId, weekId) {
   return rows;
 }
 
-// نسخة آمنة لولي الأمر: تضيف شرط classId عشان Firestore يقدر يتحقق من صلاحية القراءة
-// كاملة على مستوى الاستعلام نفسه (بدون هالشرط الإضافي يرفض الاستعلام بالكامل)
 export async function listSkillsForWeekAndClass(schoolId, weekId, classId) {
   const q = query(
     collection(db, 'schools', schoolId, 'skills'),
@@ -38,21 +36,26 @@ export async function listSkillsForWeekAndClass(schoolId, weekId, classId) {
   return rows;
 }
 
-export async function createSkill(schoolId, { weekId, classId, teacherUid, title }) {
+export async function createSkill(schoolId, params) {
+  const { weekId, classId, teacherUid, title, sourceWeekName, sourceWeekType } = params || {};
   const trimmedTitle = (title || '').trim();
   if (!trimmedTitle) throw new Error('اسم المهارة مطلوب.');
-  const ref = await addDoc(collection(db, 'schools', schoolId, 'skills'), {
+
+  const docData = {
     weekId,
     classId,
     teacherUid,
     title: trimmedTitle,
     archived: false,
     createdAt: serverTimestamp(),
-  });
+    sourceWeekName: sourceWeekName ? sourceWeekName : null,
+    sourceWeekType: sourceWeekType ? sourceWeekType : null,
+  };
+
+  const ref = await addDoc(collection(db, 'schools', schoolId, 'skills'), docData);
   return { id: ref.id };
 }
 
-// تعديل اسم مهارة موجودة، دون التأثير على تقييماتها المسجَّلة
 export async function updateSkillTitle(schoolId, skillId, title) {
   const trimmedTitle = (title || '').trim();
   if (!trimmedTitle) throw new Error('اسم المهارة مطلوب.');
@@ -61,8 +64,6 @@ export async function updateSkillTitle(schoolId, skillId, title) {
   });
 }
 
-// حذف مهارة نهائيًا، مع حذف كل التقييمات المسجَّلة عليها لكل الطالبات،
-// ثم إعادة حساب ملخّص الأسبوع المخزَّن ليعكس الحذف فورًا
 export async function deleteSkillWithAssessments(schoolId, skillId) {
   const skillSnap = await getDoc(doc(db, 'schools', schoolId, 'skills', skillId));
   const weekId = skillSnap.exists() ? skillSnap.data().weekId : null;
@@ -81,8 +82,6 @@ export async function deleteSkillWithAssessments(schoolId, skillId) {
   }
 }
 
-// محفوظة للتوافق مع أي استخدام سابق — تحذف وثيقة المهارة فقط دون تقييماتها.
-// يُفضَّل استخدام deleteSkillWithAssessments بدلًا منها لضمان عدم بقاء بيانات يتيمة.
 export async function deleteSkill(schoolId, skillId) {
   await deleteDoc(doc(db, 'schools', schoolId, 'skills', skillId));
 }
