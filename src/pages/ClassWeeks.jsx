@@ -103,7 +103,7 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
     }
   }
 
-  function toggleSkillSelected(skill, weekName) {
+  function toggleSkillSelected(skill, weekName, weekType) {
     setSelectedSkillIds((prev) => {
       const next = new Set(prev);
       if (next.has(skill.id)) next.delete(skill.id);
@@ -113,7 +113,7 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
     setSelectedSkillMeta((prev) => {
       const next = { ...prev };
       if (next[skill.id]) delete next[skill.id];
-      else next[skill.id] = { title: skill.title, weekName };
+      else next[skill.id] = { title: skill.title, weekName, weekType };
       return next;
     });
   }
@@ -224,7 +224,8 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
 
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
-  const browsingWeekName = weeks.find((w) => w.id === browsingWeekId)?.name || '';
+  const browsingWeek = weeks.find((w) => w.id === browsingWeekId);
+  const selectedSkillEntries = Object.entries(selectedSkillMeta);
 
   return (
     <div style={{ maxWidth: 600, margin: '20px auto', padding: spacing.lg }} dir="rtl">
@@ -298,7 +299,7 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
         <div style={{ border: `1px solid ${colors.amberBorder}`, background: colors.amberTint, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.lg }}>
           <h3 style={{ marginTop: 0, fontFamily: font.family, color: colors.amber }}>تجميع مهارات محدَّدة من عدة أسابيع</h3>
           <p style={{ fontSize: 12, color: colors.amber, marginTop: 0, marginBottom: spacing.sm }}>
-            اختاري أسبوعًا من القائمة لعرض مهاراته، وحددي منها ما تبين تجميعه. يمكن تكرار الاختيار من أكثر من أسبوع قبل إنشاء أسبوع المعالجة الجديد.
+            يُرجى اختيار أسبوع من القائمة لعرض مهاراته، وتحديد المهارات المطلوب تجميعها منه. يمكن تكرار الاختيار من أكثر من أسبوع قبل إنشاء أسبوع المعالجة الجديد.
           </p>
 
           <label style={{ fontSize: 13 }}>استعراض مهارات أسبوع</label>
@@ -325,7 +326,7 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
                     <input
                       type="checkbox"
                       checked={selectedSkillIds.has(skill.id)}
-                      onChange={() => toggleSkillSelected(skill, browsingWeekName)}
+                      onChange={() => toggleSkillSelected(skill, browsingWeek?.name, browsingWeek?.type)}
                     />
                     {skill.title}
                   </label>
@@ -334,24 +335,52 @@ export default function ClassWeeks({ schoolId, classId, teacherUid, teacherName,
             </div>
           )}
 
-          {selectedSkillIds.size > 0 && (
+          {selectedSkillEntries.length > 0 && (
             <>
               <p style={{ fontSize: 13, fontWeight: 'bold', color: colors.amber, marginBottom: 6 }}>
-                المهارات المحدَّدة حتى الآن ({selectedSkillIds.size}):
+                المهارات المحدَّدة حتى الآن:
               </p>
-              <div style={{ background: '#fff', borderRadius: radius.button, padding: spacing.sm, marginBottom: spacing.md }}>
-                {Object.entries(selectedSkillMeta).map(([skillId, meta]) => (
-                  <div key={skillId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
-                    <span>{meta.title} <span style={{ color: colors.textMuted, fontSize: 11 }}>({meta.weekName})</span></span>
-                    <button
-                      type="button"
-                      onClick={() => removeSelectedSkill(skillId)}
-                      style={{ padding: '2px 8px', background: colors.redTint, border: `1px solid ${colors.redBorder}`, color: colors.red, borderRadius: 6, fontSize: 11 }}
-                    >
-                      إزالة
-                    </button>
-                  </div>
-                ))}
+              <div style={{ background: '#fff', borderRadius: radius.button, padding: spacing.sm, marginBottom: spacing.md, overflowX: 'auto' }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                  <thead>
+                    <tr>
+                      {selectedSkillEntries.map(([skillId, meta]) => (
+                        <th key={skillId} style={{ padding: '6px 10px', borderBottom: `2px solid ${colors.amberBorder}`, whiteSpace: 'nowrap', textAlign: 'center' }}>
+                          {meta.title}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      {selectedSkillEntries.map(([skillId, meta]) => (
+                        <td key={skillId} style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '1px solid #eee' }}>
+                          {meta.weekName}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      {selectedSkillEntries.map(([skillId, meta]) => (
+                        <td key={skillId} style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '1px solid #eee', color: meta.weekType === 'remediation' ? colors.amber : colors.primary, fontWeight: 'bold' }}>
+                          {TYPE_LABELS[meta.weekType] || '—'}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      {selectedSkillEntries.map(([skillId]) => (
+                        <td key={skillId} style={{ padding: '6px 10px', textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => removeSelectedSkill(skillId)}
+                            style={{ padding: '2px 8px', background: colors.redTint, border: `1px solid ${colors.redBorder}`, color: colors.red, borderRadius: 6, fontSize: 11 }}
+                          >
+                            إزالة
+                          </button>
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
               <form onSubmit={handleMerge} style={{ borderTop: `1px solid ${colors.amberBorder}`, paddingTop: spacing.md }}>
