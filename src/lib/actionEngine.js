@@ -156,6 +156,7 @@ async function upsertAction(schoolId, { classId, teacherUid, studentId, studentN
   const existingQ = query(
     actionsRef,
     where('studentId', '==', studentId),
+    where('teacherUid', '==', teacherUid),
     where('type', '==', type),
     where('status', '==', 'active'),
   );
