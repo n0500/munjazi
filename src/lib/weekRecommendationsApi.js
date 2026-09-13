@@ -31,10 +31,16 @@ export async function listRecommendationsForWeek(schoolId, weekId) {
 
 // يجيب توصية طالبة واحدة محددة بأسبوع معيّن — يستخدم بلوحة ولي الأمر، لأن قراءة
 // كل توصيات الأسبوع (listRecommendationsForWeek) ترفضها قواعد الأمان لولي الأمر
-// (يسمح له فقط بقراءة توصية طالبته)
+// (يسمح له فقط بقراءة توصية طالبته). لو المستند غير موجود أصلاً (لا توجد توصية
+// لهذا الأسبوع)، يفشل تقييم قاعدة الأمان لأنها تتحقق من بيانات مستند فارغ —
+// هذا متوقع وليس خطأ حقيقي، فنرجّع نصًا فارغًا بهدوء بدل رمي الخطأ للواجهة.
 export async function getStudentRecommendation(schoolId, weekId, studentId) {
-  const snap = await getDoc(doc(db, 'schools', schoolId, 'weekRecommendations', recDocId(weekId, studentId)));
-  return snap.exists() ? snap.data().text || '' : '';
+  try {
+    const snap = await getDoc(doc(db, 'schools', schoolId, 'weekRecommendations', recDocId(weekId, studentId)));
+    return snap.exists() ? snap.data().text || '' : '';
+  } catch {
+    return '';
+  }
 }
 
 export async function setWeekRecommendation(schoolId, { weekId, classId, teacherUid, studentId, text }) {
