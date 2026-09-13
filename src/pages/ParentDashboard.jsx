@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getClass } from '../lib/classesApi';
-import { buildParentOverviewData, buildSubjectWeekSkills } from '../lib/reportsApi';
+import { buildParentOverviewData } from '../lib/reportsApi';
 import { logParentAcknowledgment } from '../lib/actionEngine';
 import { colors, font, radius, spacing } from '../lib/theme';
 
@@ -22,53 +22,31 @@ function SkillBadge({ status, statusLabel }) {
   );
 }
 
-// تصنيف دقيق لكل مادة (للشارة العلوية فقط)، من الأخطر إلى الأفضل:
-// إجراء نشط (رسمي موثّق) > غير متقنة > تحتاج دعمًا > ممتازة > غائبة بالكامل > غائبة جزئيًا > لم تُرصد
-function classifySubject(subject) {
-  const hasActiveRemedial = subject.activeActions.some((a) => a.type === 'remedial');
-  if (hasActiveRemedial) return 'activeAction';
-
-  if (!subject.skillRows || subject.skillRows.length === 0) return 'notTracked';
-
-  const hasNotMastered = subject.skillRows.some((sk) => sk.status === 'notMastered');
-  if (hasNotMastered) return 'notMastered';
-
-  const hasNeedsSupport = subject.skillRows.some((sk) => sk.status === 'needsSupport');
-  if (hasNeedsSupport) return 'needsSupport';
-
-  if (subject.totalSkills > 0 && subject.masteredCount === subject.totalSkills) return 'excellent';
-
-  const absentCount = subject.skillRows.filter((sk) => sk.status === 'absent').length;
-  if (absentCount === subject.skillRows.length) return 'absentOnly';
-  if (absentCount > 0) return 'partiallyAbsent';
-
-  return 'notTracked';
+function formatDate(seconds) {
+  if (!seconds) return '';
+  try {
+    return new Date(seconds * 1000).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch {
+    return '';
+  }
 }
 
-const BADGE_CONFIG = {
-  activeAction: { label: 'إجراء نشط', bg: colors.amberTint, text: colors.amber, border: colors.amberBorder },
-  notMastered: { label: 'غير متقنة', bg: colors.redTint, text: colors.red, border: colors.redBorder },
-  needsSupport: { label: 'تحتاج دعمًا', bg: '#fff7e0', text: '#8a6d00', border: '#d9b400' },
-  excellent: { label: 'ممتازة', bg: colors.primaryTint, text: '#0b5c33', border: colors.primary },
-  absentOnly: { label: 'غائبة', bg: '#eef2f7', text: '#3d5a80', border: '#a9c0d9' },
-  partiallyAbsent: { label: 'غياب جزئي', bg: '#eef2f7', text: '#3d5a80', border: '#a9c0d9' },
-};
-
-function weakSkillsFor(subject) {
-  return (subject.skillRows || []).filter((sk) => sk.status === 'notMastered');
-}
-
-function absentSkillsFor(subject) {
-  return (subject.skillRows || []).filter((sk) => sk.status === 'absent');
+// النص التوجيهي المناسب لمهارة تحتاج متابعة: نص الإجراء العلاجي لو موجود ومغطي لهذي المهارة،
+// وإلا نص التوصية الأسبوعية العامة للطالبة بهذي المادة، وإلا رسالة افتراضية
+function skillGuidance(subject, skill) {
+  const remedial = (subject.activeActions || []).find(
+    (a) => a.type === 'remedial' && (a.affectedSkillTitles || []).some((t) => (t || '').trim() === skill.title.trim()),
+  );
+  if (remedial) return { type: 'remedial', text: remedial.text };
+  if (subject.weekRecommendation) return { type: 'general', text: subject.weekRecommendation };
+  return { type: 'none', text: 'لم تُضف توصية بعد.' };
 }
 
 export default function ParentDashboard({ schoolId, profile, logout }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState('all');
   const [expandedSubjects, setExpandedSubjects] = useState(new Set());
-  const [focusMap, setFocusMap] = useState({});
 
   useEffect(() => {
     (async () => {
@@ -93,17 +71,6 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
             studentName: student.name,
           });
           setData(overview);
-
-          const autoExpand = new Set();
-          const autoFocus = {};
-          overview.subjects.forEach((s) => {
-            const classification = classifySubject(s);
-            autoExpand.add(s.teacherUid); // كل المواد تُفتح تلقائيًا
-            if (classification === 'notMastered') autoFocus[s.teacherUid] = 'weak';
-            else if (classification === 'absentOnly' || classification === 'partiallyAbsent') autoFocus[s.teacherUid] = 'absent';
-          });
-          setExpandedSubjects(autoExpand);
-          setFocusMap(autoFocus);
 
           overview.subjects.forEach((s) => {
             s.activeActions
@@ -144,38 +111,39 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
     );
   }
 
-  function toggleSubject(teacherUid, focusMode) {
+  function toggleSubject(teacherUid) {
     setExpandedSubjects((prev) => {
       const next = new Set(prev);
-      if (next.has(teacherUid) && !focusMode) {
-        next.delete(teacherUid);
-      } else {
-        next.add(teacherUid);
-      }
+      if (next.has(teacherUid)) next.delete(teacherUid);
+      else next.add(teacherUid);
       return next;
     });
-    if (focusMode) {
-      setFocusMap((prev) => ({ ...prev, [teacherUid]: focusMode }));
-    }
   }
 
-  function clearFocus(teacherUid) {
-    setFocusMap((prev) => ({ ...prev, [teacherUid]: null }));
-  }
+  const trackedSubjects = data.subjects.filter((s) => s.latestWeekId);
 
-  // المواد اللي ما رُصدت أصلاً (المعلمة ما أنشأت أسبوعًا بعد) لا تهم ولي الأمر، فلا تظهر إطلاقًا
-  const trackedSubjects = data.subjects
-    .map((s) => ({ ...s, classification: classifySubject(s) }))
-    .filter((s) => s.classification !== 'notTracked');
+  // إجماليات البطاقات الثلاث — من كل المهارات المرصودة بآخر أسبوع لكل مادة
+  let masteredSkillsCount = 0;
+  let needsAttentionSkillsCount = 0;
+  trackedSubjects.forEach((s) => {
+    (s.skillRows || []).forEach((sk) => {
+      if (sk.status === 'mastered') masteredSkillsCount += 1;
+      else if (sk.status === 'notMastered' || sk.status === 'needsSupport') needsAttentionSkillsCount += 1;
+    });
+  });
 
-  const activeActionCount = trackedSubjects.filter((s) => s.classification === 'activeAction').length;
-  const notMasteredCount = trackedSubjects.filter((s) => weakSkillsFor(s).length > 0).length;
-  const needsSupportCount = trackedSubjects.filter((s) => (s.skillRows || []).some((sk) => sk.status === 'needsSupport')).length;
-  const excellentCount = trackedSubjects.filter((s) => s.classification === 'excellent').length;
+  const newRecommendationsCount = trackedSubjects
+    .flatMap((s) => s.activeActions)
+    .filter((a) => a.type === 'remedial' && !a.parentAcknowledgment?.viewedAt).length;
 
-  const filteredSubjects = trackedSubjects.filter((s) => {
-    if (filter === 'needsAttention') return ['activeAction', 'notMastered', 'needsSupport'].includes(s.classification);
-    return true;
+  // قائمة كل مهارة تحتاج متابعة عبر كل المواد، مع نصها التوجيهي
+  const attentionItems = [];
+  trackedSubjects.forEach((s) => {
+    (s.skillRows || []).forEach((sk) => {
+      if (sk.status === 'notMastered' || sk.status === 'needsSupport') {
+        attentionItems.push({ subjectName: s.subject, skill: sk, guidance: skillGuidance(s, sk) });
+      }
+    });
   });
 
   return (
@@ -184,8 +152,13 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
         <div>
           <h1 style={{ fontSize: 20, margin: 0, fontFamily: font.family, color: colors.ink }}>مرحبًا</h1>
           <p style={{ color: colors.textMuted, fontSize: 14, marginTop: 4, marginBottom: 0 }}>
-            إليك ملخص متابعة {data.studentName} — {data.className}
+            إليك ملخص متابعة {data.studentName} — {data.className} — {data.schoolName}
           </p>
+          {data.lastUpdatedAt && (
+            <p style={{ color: colors.textMuted, fontSize: 11, marginTop: 2, marginBottom: 0 }}>
+              آخر تحديث: {formatDate(data.lastUpdatedAt)}
+            </p>
+          )}
         </div>
         <button onClick={logout} style={{ padding: '6px 14px', background: colors.red, color: '#fff', border: 'none', borderRadius: radius.button, fontSize: 12, whiteSpace: 'nowrap' }}>
           تسجيل الخروج
@@ -194,124 +167,94 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
 
       <div style={{ height: spacing.lg }} />
 
-      {data.priority && (
-        <div style={{ background: colors.amberTint, border: `1px solid ${colors.amberBorder}`, color: colors.amber, borderRadius: radius.card, padding: spacing.md, marginBottom: spacing.lg }}>
-          <div style={{ fontWeight: font.weightMedium, fontSize: 13, marginBottom: 4 }}>⚠ الأولوية الآن</div>
-          <div style={{ fontSize: 13 }}>
-            {data.priority.subject}: {data.priority.text}
-          </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: spacing.sm, marginBottom: spacing.xl }}>
+        <div style={{ textAlign: 'center', border: `1px solid ${colors.primary}`, borderRadius: radius.card, padding: '12px 4px', background: colors.primaryTint }}>
+          <div style={{ fontSize: 20, fontWeight: 'bold', color: '#0b5c33' }}>{masteredSkillsCount}</div>
+          <div style={{ fontSize: 11, color: '#0b5c33' }}>متقنة</div>
+        </div>
+        <div style={{ textAlign: 'center', border: `1px solid ${colors.redBorder}`, borderRadius: radius.card, padding: '12px 4px', background: colors.redTint }}>
+          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.red }}>{needsAttentionSkillsCount}</div>
+          <div style={{ fontSize: 11, color: colors.red }}>تحتاج متابعة</div>
+        </div>
+        <div style={{ textAlign: 'center', border: `1px solid ${colors.amberBorder}`, borderRadius: radius.card, padding: '12px 4px', background: colors.amberTint }}>
+          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.amber }}>{newRecommendationsCount}</div>
+          <div style={{ fontSize: 11, color: colors.amber }}>توصيات جديدة</div>
+        </div>
+      </div>
+
+      <h3 style={{ fontSize: 16, margin: '0 0 10px', fontFamily: font.family }}>يحتاج متابعتك</h3>
+
+      {attentionItems.length === 0 ? (
+        <div style={{ background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: radius.card, padding: spacing.md, marginBottom: spacing.xl, textAlign: 'center', fontSize: 13 }}>
+          ✓ ممتاز، لا توجد مهارات تحتاج متابعة حاليًا
+        </div>
+      ) : (
+        <div style={{ marginBottom: spacing.xl }}>
+          {attentionItems.map((item, i) => (
+            <div key={i} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.md, marginBottom: spacing.sm }}>
+              <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 2 }}>{item.subjectName}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontWeight: 'bold', fontSize: 14 }}>{item.skill.title}</span>
+                <SkillBadge status={item.skill.status} statusLabel={item.skill.statusLabel} />
+              </div>
+              {item.guidance.type === 'remedial' && (
+                <div style={{ background: colors.amberTint, border: `1px solid ${colors.amberBorder}`, color: colors.amber, borderRadius: radius.button, padding: '8px 10px', fontSize: 12 }}>
+                  <strong>⚠ إجراء علاجي:</strong> {item.guidance.text}
+                </div>
+              )}
+              {item.guidance.type === 'general' && (
+                <div style={{ background: '#eef2f7', border: '1px solid #a9c0d9', color: '#3d5a80', borderRadius: radius.button, padding: '8px 10px', fontSize: 12 }}>
+                  <strong>توصية:</strong> {item.guidance.text}
+                </div>
+              )}
+              {item.guidance.type === 'none' && (
+                <div style={{ color: colors.textMuted, fontSize: 12, fontStyle: 'italic' }}>{item.guidance.text}</div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.sm, marginBottom: spacing.xl }}>
-        <div style={{ textAlign: 'center', border: `1px solid ${colors.amberBorder}`, borderRadius: radius.card, padding: '12px 4px', background: colors.amberTint }}>
-          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.amber }}>{activeActionCount}</div>
-          <div style={{ fontSize: 11, color: colors.amber }}>إجراء نشط</div>
-        </div>
-        <div style={{ textAlign: 'center', border: `1px solid ${colors.redBorder}`, borderRadius: radius.card, padding: '12px 4px', background: colors.redTint }}>
-          <div style={{ fontSize: 20, fontWeight: 'bold', color: colors.red }}>{notMasteredCount}</div>
-          <div style={{ fontSize: 11, color: colors.red }}>غير متقنة</div>
-        </div>
-        <div style={{ textAlign: 'center', border: '1px solid #d9b400', borderRadius: radius.card, padding: '12px 4px', background: '#fff7e0' }}>
-          <div style={{ fontSize: 20, fontWeight: 'bold', color: '#8a6d00' }}>{needsSupportCount}</div>
-          <div style={{ fontSize: 11, color: '#8a6d00' }}>تحتاج دعمًا</div>
-        </div>
-        <div style={{ textAlign: 'center', border: `1px solid ${colors.primary}`, borderRadius: radius.card, padding: '12px 4px', background: colors.primaryTint }}>
-          <div style={{ fontSize: 20, fontWeight: 'bold', color: '#0b5c33' }}>{excellentCount}</div>
-          <div style={{ fontSize: 11, color: '#0b5c33' }}>ممتازة</div>
-        </div>
-      </div>
+      <h3 style={{ fontSize: 16, margin: '0 0 10px', fontFamily: font.family }}>المواد الدراسية</h3>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
-        <span style={{ fontSize: 12, color: colors.textMuted }}>المواد اللي تحتاج انتباهك مفتوحة تلقائيًا أدناه</span>
-        <h3 style={{ fontSize: 15, margin: 0, fontFamily: font.family }}>المواد الدراسية</h3>
-      </div>
-
-      <div style={{ display: 'flex', gap: 6, marginBottom: spacing.md }}>
-        {[
-          { key: 'all', label: 'الكل' },
-          { key: 'needsAttention', label: 'تحتاج متابعة' },
-        ].map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            style={{
-              padding: '6px 14px', borderRadius: radius.pill, fontSize: 12, border: filter === f.key ? 'none' : `1px solid ${colors.border}`,
-              background: filter === f.key ? colors.primary : '#fff', color: filter === f.key ? '#fff' : '#555',
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {filteredSubjects.length === 0 ? (
-        <p style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center', marginTop: 20 }}>لا توجد مواد تطابق هذا الفلتر.</p>
+      {trackedSubjects.length === 0 ? (
+        <p style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center', marginTop: 20 }}>لا توجد مواد مرصودة بعد.</p>
       ) : (
-        filteredSubjects.map((s) => {
-          const badge = BADGE_CONFIG[s.classification];
+        trackedSubjects.map((s) => {
           const isExpanded = expandedSubjects.has(s.teacherUid);
-          const focusMode = focusMap[s.teacherUid] || null;
-          const remedial = s.activeActions.find((a) => a.type === 'remedial');
           const enrichment = s.activeActions.find((a) => a.type === 'enrichment');
-          const weakSkills = weakSkillsFor(s);
-          const absentSkills = absentSkillsFor(s);
-          const fallbackLink = s.enrichmentLink;
+          const absentCount = (s.skillRows || []).filter((sk) => sk.status === 'absent').length;
+          const fullyAbsent = s.totalSkills > 0 && absentCount === s.totalSkills;
+          const needsAttentionCount = (s.skillRows || []).filter((sk) => sk.status === 'notMastered' || sk.status === 'needsSupport').length;
 
           return (
             <div key={s.teacherUid} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, marginBottom: spacing.sm, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', alignItems: 'stretch' }}>
-                <button
-                  onClick={() => toggleSubject(s.teacherUid, null)}
-                  style={{ flex: 1, background: '#fff', border: 'none', padding: spacing.md, display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'right' }}
-                >
-                  <span style={{ background: badge.bg, color: badge.text, border: `1px solid ${badge.border}`, borderRadius: radius.pill, padding: '3px 10px', fontSize: 11, whiteSpace: 'nowrap' }}>
-                    {badge.label}
-                  </span>
-                  <div>
-                    <div style={{ fontWeight: 'bold', fontSize: 14, fontFamily: font.family, color: colors.ink }}>{s.subject}</div>
-                    <div style={{ fontSize: 11, color: colors.textMuted }}>
-                      {`${s.masteredCount} من ${s.totalSkills} متقنة`}
-                    </div>
+              <button
+                onClick={() => toggleSubject(s.teacherUid)}
+                style={{ width: '100%', background: '#fff', border: 'none', padding: spacing.md, display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'right' }}
+              >
+                <span style={{ color: colors.textMuted, fontSize: 12 }}>{isExpanded ? '▲' : '▼'}</span>
+                <div style={{ flex: 1, marginRight: 10 }}>
+                  <div style={{ fontWeight: 'bold', fontSize: 14, fontFamily: font.family, color: colors.ink }}>{s.subject}</div>
+                  <div style={{ fontSize: 11, color: colors.textMuted }}>
+                    {fullyAbsent ? 'غائبة بالكامل هذا الأسبوع' : `${s.masteredCount} متقنة، ${needsAttentionCount} تحتاج متابعة`}
                   </div>
-                </button>
-
-                <div style={{ display: 'flex' }}>
-                  {weakSkills.length > 0 && (
-                    <button
-                      onClick={() => toggleSubject(s.teacherUid, 'weak')}
-                      style={{
-                        background: colors.redTint, border: 'none', borderRight: `1px solid ${colors.border}`,
-                        padding: '0 12px', color: colors.red, fontSize: 12, fontWeight: 'bold', whiteSpace: 'nowrap',
-                      }}
-                    >
-                      ⚠ {weakSkills.length}
-                    </button>
-                  )}
-                  {absentSkills.length > 0 && (
-                    <button
-                      onClick={() => toggleSubject(s.teacherUid, 'absent')}
-                      style={{
-                        background: '#eef2f7', border: 'none', borderRight: `1px solid ${colors.border}`,
-                        padding: '0 12px', color: '#3d5a80', fontSize: 12, fontWeight: 'bold', whiteSpace: 'nowrap',
-                      }}
-                    >
-                      ⭕ {absentSkills.length}
-                    </button>
-                  )}
                 </div>
-              </div>
+              </button>
 
               {isExpanded && (
                 <div style={{ borderTop: `1px solid ${colors.border}`, padding: spacing.md }}>
                   <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: spacing.sm }}>{s.teacherName}</div>
 
-                  {remedial && (
-                    <div style={{ background: colors.amberTint, border: `1px solid ${colors.amberBorder}`, color: colors.amber, borderRadius: radius.button, padding: '8px 10px', fontSize: 12, marginBottom: spacing.sm }}>
-                      <strong>⚠ إجراء علاجي — {remedial.affectedSkillTitles.join('، ')}</strong>
-                      <div style={{ marginTop: 4 }}>{remedial.text}</div>
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: spacing.sm }}>
+                    {(s.skillRows || []).map((sk, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+                        <SkillBadge status={sk.status} statusLabel={sk.statusLabel} />
+                        <span>{sk.title}</span>
+                      </div>
+                    ))}
+                  </div>
+
                   {enrichment && (
                     <div style={{ background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: radius.button, padding: '6px 10px', fontSize: 11, marginBottom: spacing.sm }}>
                       <strong>⭐ إجراء إثرائي — {enrichment.affectedSkillTitles.join('، ')}</strong>
@@ -329,58 +272,9 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                     </div>
                   )}
 
-                  {focusMode === 'weak' && weakSkills.length > 0 && (
-                    <>
-                      <p style={{ fontSize: 12, color: colors.red, fontWeight: 'bold', marginBottom: 6 }}>
-                        مهارات غير متقنة بآخر أسبوع:
-                      </p>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: spacing.sm }}>
-                        {weakSkills.map((sk, i) => (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
-                            <SkillBadge status={sk.status} statusLabel={sk.statusLabel} />
-                            <span>{sk.title}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <button onClick={() => clearFocus(s.teacherUid)} style={{ background: 'none', border: 'none', color: colors.primary, fontSize: 12, padding: 0, marginBottom: spacing.sm }}>
-                        عرض كل المهارات
-                      </button>
-                    </>
-                  )}
-
-                  {focusMode === 'absent' && absentSkills.length > 0 && (
-                    <>
-                      <p style={{ fontSize: 12, color: '#3d5a80', fontWeight: 'bold', marginBottom: 6 }}>
-                        مهارات غائبة بآخر أسبوع:
-                      </p>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: spacing.sm }}>
-                        {absentSkills.map((sk, i) => (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
-                            <SkillBadge status={sk.status} statusLabel={sk.statusLabel} />
-                            <span>{sk.title}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <button onClick={() => clearFocus(s.teacherUid)} style={{ background: 'none', border: 'none', color: colors.primary, fontSize: 12, padding: 0, marginBottom: spacing.sm }}>
-                        عرض كل المهارات
-                      </button>
-                    </>
-                  )}
-
-                  {!focusMode && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: spacing.sm }}>
-                      {(s.skillRows || []).map((sk, i) => (
-                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
-                          <SkillBadge status={sk.status} statusLabel={sk.statusLabel} />
-                          <span>{sk.title}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {!enrichment?.enrichmentLink && fallbackLink && (
+                  {!enrichment?.enrichmentLink && s.enrichmentLink && (
                     <a
-                      href={fallbackLink}
+                      href={s.enrichmentLink}
                       target="_blank"
                       rel="noreferrer"
                       style={{ display: 'block', textAlign: 'center', background: colors.primary, color: '#fff', borderRadius: radius.button, padding: '10px', fontSize: 13, textDecoration: 'none' }}
