@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Logo from './components/Logo';
 import PdfTestPage from './pages/PdfTestPage';
+import ScanActions from './pages/ScanActions';
 import { colors } from './lib/theme';
 
 // تحميل تدريجي (Lazy Loading) لكل لوحة — يتحمّل كودها فقط وقت الحاجة الفعلية لها،
@@ -41,11 +42,22 @@ function TopBar({ logout }) {
 
 function AppInner() {
   const { firebaseUser, profile, loading, logout } = useAuth();
+  const params = new URLSearchParams(window.location.search);
 
   if (loading) return <p style={{ textAlign: 'center', marginTop: 60 }}>...جارٍ التحميل</p>;
 
   if (!firebaseUser || !profile) {
     return <Login />;
+  }
+
+  // أداة تنظيف مؤقتة — متاحة فقط للإدارة والمالكة، تُزال بعد انتهاء التنظيف
+  if (params.get('scanactions') === '1' && (profile.role === 'admin' || profile.role === 'owner')) {
+    return (
+      <div>
+        <TopBar logout={logout} />
+        <ScanActions schoolId={profile.schoolId} />
+      </div>
+    );
   }
 
   if (profile.role === 'owner') {
