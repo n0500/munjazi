@@ -77,45 +77,61 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
     (async () => {
       setLoading(true);
       setError('');
-      try {
-        const studentSnap = await getDoc(doc(db, 'schools', schoolId, 'students', profile.studentId));
-        if (!studentSnap.exists()) throw new Error('لم يتم العثور على بيانات الطالبة.');
-        const student = studentSnap.data();
-        const classId = student.currentClassId;
-        const classInfo = await getClass(schoolId, classId);
 
-        const overview = await buildParentOverviewData(schoolId, {
-          classId,
-          className: classInfo.name,
-          studentId: profile.studentId,
-          studentName: student.name,
-        });
-        setData(overview);
+      const maxAttempts = 4;
+      let attempt = 0;
 
-        const autoExpand = new Set();
-        const autoFocus = {};
-        overview.subjects.forEach((s) => {
-          const classification = classifySubject(s);
-          if (AUTO_EXPAND_CLASSIFICATIONS.includes(classification)) {
-            autoExpand.add(s.teacherUid);
-            if (classification === 'notMastered') autoFocus[s.teacherUid] = 'weak';
-            else if (classification === 'absentOnly' || classification === 'partiallyAbsent') autoFocus[s.teacherUid] = 'absent';
+      while (attempt < maxAttempts) {
+        try {
+          const studentSnap = await getDoc(doc(db, 'schools', schoolId, 'students', profile.studentId));
+          if (!studentSnap.exists()) throw new Error('لم يتم العثور على بيانات الطالبة.');
+          const student = studentSnap.data();
+          const classId = student.currentClassId;
+          const classInfo = await getClass(schoolId, classId);
+
+          const overview = await buildParentOverviewData(schoolId, {
+            classId,
+            className: classInfo.name,
+            studentId: profile.studentId,
+            studentName: student.name,
+          });
+          setData(overview);
+
+          const autoExpand = new Set();
+          const autoFocus = {};
+          overview.subjects.forEach((s) => {
+            const classification = classifySubject(s);
+            if (AUTO_EXPAND_CLASSIFICATIONS.includes(classification)) {
+              autoExpand.add(s.teacherUid);
+              if (classification === 'notMastered') autoFocus[s.teacherUid] = 'weak';
+              else if (classification === 'absentOnly' || classification === 'partiallyAbsent') autoFocus[s.teacherUid] = 'absent';
+            }
+          });
+          setExpandedSubjects(autoExpand);
+          setFocusMap(autoFocus);
+
+          overview.subjects.forEach((s) => {
+            s.activeActions
+              .filter((a) => a.type === 'remedial')
+              .forEach((a) => {
+                logParentAcknowledgment(schoolId, { actionId: a.id, parentUid: profile.uid }).catch(() => {});
+              });
+          });
+
+          setLoading(false);
+          return;
+        } catch (err) {
+          const isPermissionError = err.code === 'permission-denied';
+          attempt += 1;
+          if (isPermissionError && attempt < maxAttempts) {
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+            continue;
           }
-        });
-        setExpandedSubjects(autoExpand);
-        setFocusMap(autoFocus);
-
-        overview.subjects.forEach((s) => {
-          s.activeActions
-            .filter((a) => a.type === 'remedial')
-            .forEach((a) => {
-              logParentAcknowledgment(schoolId, { actionId: a.id, parentUid: profile.uid }).catch(() => {});
-            });
-        });
-      } catch (err) {
-        setError(err.message || 'تعذّر تحميل بيانات المتابعة.');
-      } finally {
-        setLoading(false);
+          setError(err.message || 'تعذّر تحميل بيانات المتابعة.');
+          setLoading(false);
+          return;
+        }
       }
     })();
   }, [schoolId, profile.studentId, profile.uid]);
