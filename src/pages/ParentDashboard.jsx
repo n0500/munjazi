@@ -45,9 +45,6 @@ function classifySubject(subject) {
   return 'notTracked';
 }
 
-// المواد بهذي الحالات تحتاج انتباهًا فوريًا، فتُفتح تلقائيًا بدون ضغط من ولي الأمر
-const AUTO_EXPAND_CLASSIFICATIONS = ['activeAction', 'notMastered', 'absentOnly', 'partiallyAbsent'];
-
 const BADGE_CONFIG = {
   activeAction: { label: 'إجراء نشط', bg: colors.amberTint, text: colors.amber, border: colors.amberBorder },
   notMastered: { label: 'غير متقنة', bg: colors.redTint, text: colors.red, border: colors.redBorder },
@@ -101,11 +98,9 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
           const autoFocus = {};
           overview.subjects.forEach((s) => {
             const classification = classifySubject(s);
-            if (AUTO_EXPAND_CLASSIFICATIONS.includes(classification)) {
-              autoExpand.add(s.teacherUid);
-              if (classification === 'notMastered') autoFocus[s.teacherUid] = 'weak';
-              else if (classification === 'absentOnly' || classification === 'partiallyAbsent') autoFocus[s.teacherUid] = 'absent';
-            }
+            autoExpand.add(s.teacherUid); // كل المواد تُفتح تلقائيًا
+            if (classification === 'notMastered') autoFocus[s.teacherUid] = 'weak';
+            else if (classification === 'absentOnly' || classification === 'partiallyAbsent') autoFocus[s.teacherUid] = 'absent';
           });
           setExpandedSubjects(autoExpand);
           setFocusMap(autoFocus);
@@ -128,7 +123,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
             await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
             continue;
           }
-          setError(`[${err.code || 'unknown'}] ${err.message}`);
+          setError(err.message || 'تعذّر تحميل بيانات المتابعة.');
           setLoading(false);
           return;
         }
@@ -174,9 +169,6 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
     .filter((s) => s.classification !== 'notTracked');
 
   const activeActionCount = trackedSubjects.filter((s) => s.classification === 'activeAction').length;
-  // نحسب "غير متقنة" و"تحتاج دعمًا" من وجود مهارة فعلية بهذي الحالة، بغض النظر عن التصنيف
-  // الحصري للمادة (بدون كذا، مادة فيها مهارة غير متقنة تولّد عنها إجراء نشط كانت تختفي من هذا
-  // العدّاد لأن التصنيف الحصري يعطي أولوية أعلى لـ"إجراء نشط")
   const notMasteredCount = trackedSubjects.filter((s) => weakSkillsFor(s).length > 0).length;
   const needsSupportCount = trackedSubjects.filter((s) => (s.skillRows || []).some((sk) => sk.status === 'needsSupport')).length;
   const excellentCount = trackedSubjects.filter((s) => s.classification === 'excellent').length;
