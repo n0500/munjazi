@@ -2,7 +2,7 @@ import { getSchool } from './schoolsApi';
 import { listWeeksForClass } from './weeksApi';
 import { listSkillsForWeek, listSkillsForWeekAndClass } from './skillsApi';
 import { listAssessmentsForSkill, getStudentAssessment } from './assessmentsApi';
-import { listRecommendationsForWeek } from './weekRecommendationsApi';
+import { listRecommendationsForWeek, getStudentRecommendation } from './weekRecommendationsApi';
 import { listClassStudents } from './studentsApi';
 import { listClassAssignments } from './classesApi';
 import { STATUS_LABELS } from './recommendationsApi';
@@ -81,8 +81,7 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
       masteredCount = skillRows.filter((s) => s.status === 'mastered').length;
 
       // eslint-disable-next-line no-await-in-loop
-      const weekRecs = await listRecommendationsForWeek(schoolId, latestWeek.id);
-      weekRecommendation = weekRecs[studentId] || '';
+      weekRecommendation = await getStudentRecommendation(schoolId, latestWeek.id, studentId);
 
       const weekCreatedSeconds = latestWeek.createdAt?.seconds || 0;
       if (!lastUpdatedAt || weekCreatedSeconds > lastUpdatedAt) lastUpdatedAt = weekCreatedSeconds;
