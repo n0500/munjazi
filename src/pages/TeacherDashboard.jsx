@@ -16,6 +16,31 @@ const TABS = [
   { key: 'library', label: 'مكتبة التوصيات' },
 ];
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// حساب المعلمة أو الإدارة الجديد قد يستغرق ثوانٍ قليلة حتى يستقر بشكل كامل على خادم
+// قاعدة البيانات مباشرة بعد الإنشاء، مما قد يتسبب برفض مؤقت لقراءة البيانات المرتبطة
+// به. تعيد هذه الدالة محاولة الجلب تلقائيًا عند مواجهة هذا الرفض المؤقت تحديدًا،
+// بدل عرض رسالة خطأ فورية للمستخدمة.
+async function fetchWithRetry(fetchFn, { maxAttempts = 4, delayMs = 900 } = {}) {
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      return await fetchFn();
+    } catch (err) {
+      lastErr = err;
+      const isPermissionIssue = err?.code === 'permission-denied' || /insufficient permissions/i.test(err?.message || '');
+      if (!isPermissionIssue || attempt === maxAttempts) throw err;
+      // eslint-disable-next-line no-await-in-loop
+      await wait(delayMs);
+    }
+  }
+  throw lastErr;
+}
+
 export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) {
   const [activeTab, setActiveTab] = useState('home');
   const [allClasses, setAllClasses] = useState([]);
@@ -36,9 +61,9 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
     setError('');
     try {
       const [classRows, assignRows, actionRows] = await Promise.all([
-        listClasses(schoolId),
-        listTeacherAssignments(schoolId, teacherUid),
-        listActionsForTeacher(schoolId, teacherUid),
+        fetchWithRetry(() => listClasses(schoolId)),
+        fetchWithRetry(() => listTeacherAssignments(schoolId, teacherUid)),
+        fetchWithRetry(() => listActionsForTeacher(schoolId, teacherUid)),
       ]);
       setAllClasses(classRows);
       setMyAssignments(assignRows);
@@ -72,8 +97,6 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
     }
   }
 
-  // إلغاء إسناد فصل من المعلمة نفسها — يحذف علاقة الإسناد فقط، والبيانات التاريخية
-  // (الأسابيع، المهارات، التقييمات) تبقى محفوظة بالكامل كما هي، غير متأثرة إطلاقًا
   async function handleUnlink(assignment) {
     const confirmed = window.confirm(
       `سيتم إلغاء إسناد فصل "${classNameFor(assignment.classId)}"${assignment.subject ? ` (${assignment.subject})` : ''}، ولن يظهر هذا الفصل باللوحة بعد الآن. تبقى كل التقييمات والبيانات السابقة محفوظة بالنظام، ويمكن ربط الفصل من جديد لاحقًا عند الحاجة. هل الرغبة في المتابعة مؤكدة؟`,
