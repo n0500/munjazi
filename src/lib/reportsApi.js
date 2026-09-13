@@ -52,10 +52,13 @@ export async function buildSubjectWeekSkills(schoolId, { weekId, classId, studen
 }
 
 export async function buildParentOverviewData(schoolId, { classId, className, studentId, studentName }) {
+  const school = await getSchool(schoolId);
   const assignments = await listSubjectsForStudentClass(schoolId, classId);
   const studentActions = await listActionsForStudent(schoolId, studentId);
 
   const subjects = [];
+  let lastUpdatedAt = null;
+
   for (const a of assignments) {
     // eslint-disable-next-line no-await-in-loop
     const weeks = await listWeeksForClass(schoolId, classId, a.teacherUid);
@@ -67,6 +70,7 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
     let totalSkills = 0;
     let enrichmentLink = '';
     let weekName = '';
+    let weekRecommendation = '';
 
     if (latestWeek) {
       weekName = latestWeek.name;
@@ -75,6 +79,13 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
       skillRows = await buildSubjectWeekSkills(schoolId, { weekId: latestWeek.id, classId, studentId });
       totalSkills = skillRows.length;
       masteredCount = skillRows.filter((s) => s.status === 'mastered').length;
+
+      // eslint-disable-next-line no-await-in-loop
+      const weekRecs = await listRecommendationsForWeek(schoolId, latestWeek.id);
+      weekRecommendation = weekRecs[studentId] || '';
+
+      const weekCreatedSeconds = latestWeek.createdAt?.seconds || 0;
+      if (!lastUpdatedAt || weekCreatedSeconds > lastUpdatedAt) lastUpdatedAt = weekCreatedSeconds;
     }
 
     const subjectActions = studentActions
@@ -86,6 +97,7 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
         affectedSkillTitles: act.affectedSkillTitles || [],
         text: act.finalText || act.suggestedText,
         enrichmentLink: act.enrichmentLink || '',
+        parentAcknowledgment: act.parentAcknowledgment || { viewedAt: null, viewedByParentId: null },
       }));
 
     const hasRemedial = subjectActions.some((x) => x.type === 'remedial');
@@ -103,6 +115,7 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
       totalSkills,
       skillRows,
       enrichmentLink,
+      weekRecommendation,
       activeActions: subjectActions,
       statusKey,
     });
@@ -114,6 +127,8 @@ export async function buildParentOverviewData(schoolId, { classId, className, st
   return {
     studentName,
     className,
+    schoolName: school.name,
+    lastUpdatedAt,
     subjects,
     priority,
     counts: {
