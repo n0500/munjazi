@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   setDoc,
   getDocs,
   query,
@@ -26,6 +27,14 @@ export async function listRecommendationsForWeek(schoolId, weekId) {
     map[data.studentId] = data.text;
   });
   return map;
+}
+
+// يجيب توصية طالبة واحدة محددة بأسبوع معيّن — يستخدم بلوحة ولي الأمر، لأن قراءة
+// كل توصيات الأسبوع (listRecommendationsForWeek) ترفضها قواعد الأمان لولي الأمر
+// (يسمح له فقط بقراءة توصية طالبته)
+export async function getStudentRecommendation(schoolId, weekId, studentId) {
+  const snap = await getDoc(doc(db, 'schools', schoolId, 'weekRecommendations', recDocId(weekId, studentId)));
+  return snap.exists() ? snap.data().text || '' : '';
 }
 
 export async function setWeekRecommendation(schoolId, { weekId, classId, teacherUid, studentId, text }) {
