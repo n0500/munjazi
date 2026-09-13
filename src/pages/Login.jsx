@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { loginOwner, loginAdmin, loginTeacher, loginParent } from '../lib/auth';
-import { registerSchoolAdmin } from '../lib/schoolAdminApi';
 import { registerTeacher } from '../lib/teachersApi';
 import Logo from '../components/Logo';
 import Footer from '../components/Footer';
@@ -55,16 +54,16 @@ export default function Login() {
     }
   }
 
+  // تسجيل حساب جديد متاح للمعلّمات فقط. حسابات الإدارة تُنشأ حصرًا من لوحة المالكة،
+  // وتُسلَّم بيانات الدخول للمديرة مباشرة — لا يوجد مسار تسجيل عام لحساب إدارة.
   async function handleRegister(e) {
     e.preventDefault();
     resetMsgs();
     if (!schoolCode.trim() || !email.trim() || !password || busy) return;
     setBusy(true);
     try {
-      const registerFn = tab === 'admin' ? registerSchoolAdmin : registerTeacher;
-      const label = tab === 'admin' ? 'إدارة' : 'معلّمة';
-      const { schoolName } = await registerFn({ schoolCode, displayName: regName, email, password });
-      setSuccessMsg(`تم إنشاء حساب ${label} "${schoolName}" وتسجيل الدخول بنجاح.`);
+      const { schoolName } = await registerTeacher({ schoolCode, displayName: regName, email, password });
+      setSuccessMsg(`تم إنشاء حساب معلّمة "${schoolName}" وتسجيل الدخول بنجاح.`);
     } catch (err) {
       setError(err.message || 'تعذّر إنشاء الحساب.');
     } finally {
@@ -123,7 +122,20 @@ export default function Login() {
         {error && <div style={{ background: colors.redTint, color: colors.red, padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{error}</div>}
         {successMsg && <div style={{ background: colors.primaryTint, color: '#0b5c33', padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{successMsg}</div>}
 
-        {!ownerMode && (tab === 'admin' || tab === 'teacher') && !registerMode && (
+        {!ownerMode && tab === 'admin' && (
+          <form onSubmit={handleStaffSubmit}>
+            <label>البريد الإلكتروني</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
+            <label>كلمة المرور</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
+            <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
+            <p style={{ textAlign: 'center', marginTop: 4 }}>
+              <button type="button" onClick={() => setOwnerMode(true)} style={linkStyleMuted}>دخول حساب المالك</button>
+            </p>
+          </form>
+        )}
+
+        {!ownerMode && tab === 'teacher' && !registerMode && (
           <form onSubmit={handleStaffSubmit}>
             <label>البريد الإلكتروني</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
@@ -132,18 +144,13 @@ export default function Login() {
             <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
             <p style={{ textAlign: 'center', marginTop: spacing.md }}>
               <button type="button" onClick={() => { setRegisterMode(true); resetMsgs(); }} style={linkStyle}>
-                {tab === 'admin' ? 'إنشاء حساب إدارة جديد' : 'إنشاء حساب معلّمة جديدة'}
+                إنشاء حساب معلّمة جديدة
               </button>
             </p>
-            {tab === 'admin' && (
-              <p style={{ textAlign: 'center', marginTop: 4 }}>
-                <button type="button" onClick={() => setOwnerMode(true)} style={linkStyleMuted}>دخول حساب المالك</button>
-              </p>
-            )}
           </form>
         )}
 
-        {!ownerMode && (tab === 'admin' || tab === 'teacher') && registerMode && (
+        {!ownerMode && tab === 'teacher' && registerMode && (
           <form onSubmit={handleRegister}>
             <label>رمز المدرسة</label>
             <input type="text" value={schoolCode} onChange={(e) => setSchoolCode(e.target.value)} style={inputStyle} required />
