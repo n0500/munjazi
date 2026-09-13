@@ -128,7 +128,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
             await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
             continue;
           }
-          setError(err.message || 'تعذّر تحميل بيانات المتابعة.');
+          setError(`[${err.code || 'unknown'}] ${err.message}`);
           setLoading(false);
           return;
         }
