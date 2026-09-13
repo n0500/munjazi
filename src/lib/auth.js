@@ -81,6 +81,7 @@ export async function loginParent(nationalId) {
       throw err;
     }
     const cred = await createUserWithEmailAndPassword(auth, pseudoEmail, trimmedId);
+    await cred.user.getIdToken(true);
     await setDoc(doc(db, 'users', cred.user.uid), {
       role: 'parent',
       schoolId,
