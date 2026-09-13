@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { listSchools, createSchool, setSchoolActive } from '../lib/schoolsApi';
+import { listSchoolTeachers } from '../lib/teachersApi';
 import { colors, font, radius, spacing } from '../lib/theme';
 
 export default function OwnerDashboard() {
@@ -11,6 +14,9 @@ export default function OwnerDashboard() {
   const [principalName, setPrincipalName] = useState('');
   const [creating, setCreating] = useState(false);
   const [lastCreatedCode, setLastCreatedCode] = useState('');
+
+  const [stats, setStats] = useState({ totalTeachers: 0, totalStudents: 0 });
+  const [statsLoading, setStatsLoading] = useState(true);
 
   async function refresh() {
     setLoading(true);
@@ -25,9 +31,45 @@ export default function OwnerDashboard() {
     }
   }
 
+  // يجمع إحصائيات شاملة (معلمات وطالبات) عبر كل المدارس مجتمعة — يعمل بشكل منفصل
+  // عن تحميل قائمة المدارس نفسها، لأنه يحتاج استعلامات إضافية لكل مدرسة
+  async function loadStats(schoolRows) {
+    setStatsLoading(true);
+    try {
+      let totalTeachers = 0;
+      let totalStudents = 0;
+
+      await Promise.all(
+        schoolRows.map(async (school) => {
+          const teachers = await listSchoolTeachers(school.id);
+          totalTeachers += teachers.length;
+
+          const studentsSnap = await getDocs(collection(db, 'schools', school.id, 'students'));
+          const activeStudents = studentsSnap.docs.filter((d) => d.data().archived !== true);
+          totalStudents += activeStudents.length;
+        }),
+      );
+
+      setStats({ totalTeachers, totalStudents });
+    } catch (err) {
+      setError(err.message || 'تعذّر تحميل الإحصائيات الشاملة.');
+    } finally {
+      setStatsLoading(false);
+    }
+  }
+
   useEffect(() => {
     refresh();
   }, []);
+
+  useEffect(() => {
+    if (!loading && schools.length > 0) {
+      loadStats(schools);
+    } else if (!loading) {
+      setStatsLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, schools]);
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -58,6 +100,9 @@ export default function OwnerDashboard() {
     }
   }
 
+  const activeSchoolsCount = schools.filter((s) => s.active).length;
+  const inactiveSchoolsCount = schools.length - activeSchoolsCount;
+
   return (
     <div style={{ maxWidth: 600, margin: '40px auto', padding: spacing.lg }} dir="rtl">
       <h1 style={{ fontFamily: font.family, color: colors.ink }}>لوحة إدارة المدارس</h1>
@@ -67,6 +112,24 @@ export default function OwnerDashboard() {
           {error}
         </div>
       )}
+
+      <div style={{ display: 'flex', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.xl }}>
+        <div style={{ flex: '1 1 130px', border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.md, textAlign: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 'bold', color: colors.ink }}>{schools.length}</div>
+          <div style={{ fontSize: 12, color: colors.textMuted }}>مدرسة إجمالًا</div>
+          {schools.length > 0 && (
+            <div style={{ fontSize: 11, color: colors.textMuted }}>({activeSchoolsCount} نشطة{inactiveSchoolsCount > 0 ? `، ${inactiveSchoolsCount} معطّلة` : ''})</div>
+          )}
+        </div>
+        <div style={{ flex: '1 1 130px', border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.md, textAlign: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 'bold', color: colors.ink }}>{statsLoading ? '...' : stats.totalTeachers}</div>
+          <div style={{ fontSize: 12, color: colors.textMuted }}>معلّمة إجمالًا</div>
+        </div>
+        <div style={{ flex: '1 1 130px', border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.md, textAlign: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 'bold', color: colors.ink }}>{statsLoading ? '...' : stats.totalStudents}</div>
+          <div style={{ fontSize: 12, color: colors.textMuted }}>طالبة إجمالًا</div>
+        </div>
+      </div>
 
       <form onSubmit={handleCreate} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.xl }}>
         <h3 style={{ marginTop: 0, fontFamily: font.family }}>إضافة مدرسة جديدة</h3>
