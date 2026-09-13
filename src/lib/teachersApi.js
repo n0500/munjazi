@@ -17,6 +17,7 @@ export async function registerTeacher({ schoolCode, displayName, email, password
 
   const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
   try {
+    await cred.user.getIdToken(true);
     await setDoc(doc(db, 'users', cred.user.uid), {
       role: 'teacher',
       schoolId: schoolDoc.id,
