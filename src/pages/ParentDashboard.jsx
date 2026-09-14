@@ -226,6 +226,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
           const absentCount = (s.skillRows || []).filter((sk) => sk.status === 'absent').length;
           const fullyAbsent = s.totalSkills > 0 && absentCount === s.totalSkills;
           const needsAttentionCount = (s.skillRows || []).filter((sk) => sk.status === 'notMastered' || sk.status === 'needsSupport').length;
+          const isFullyMastered = s.totalSkills > 0 && needsAttentionCount === 0 && !fullyAbsent;
 
           return (
             <div key={s.teacherUid} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, marginBottom: spacing.sm, overflow: 'hidden' }}>
@@ -254,6 +255,12 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                       </div>
                     ))}
                   </div>
+
+                  {isFullyMastered && s.weekRecommendation && (
+                    <div style={{ background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: radius.button, padding: '8px 10px', fontSize: 12, marginBottom: spacing.sm }}>
+                      🎉 {s.weekRecommendation}
+                    </div>
+                  )}
 
                   {enrichment && (
                     <div style={{ background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: radius.button, padding: '6px 10px', fontSize: 11, marginBottom: spacing.sm }}>
