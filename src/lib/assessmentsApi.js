@@ -1,7 +1,6 @@
 import {
   collection,
   doc,
-  getDoc,
   setDoc,
   updateDoc,
   getDocs,
@@ -30,12 +29,20 @@ export async function listAssessmentsForSkill(schoolId, skillId) {
   return map;
 }
 
-// قراءة آمنة لتقييم طالبة واحدة بمهارة واحدة — تُستخدم لولي الأمر عشان ما يحتاج
-// صلاحية على تقييمات كل طالبات الفصل (تجيب الوثيقة مباشرة بمعرّفها الثابت)
+// Filter by the student and skill so a missing assessment is an empty result.
+// Direct reads (including documentId equality queries) can still evaluate a
+// missing resource.data in field-based parent rules. Keep the canonical ID
+// check after the authorized query to preserve the existing record identity.
 export async function getStudentAssessment(schoolId, skillId, studentId) {
   const id = assessmentDocId(skillId, studentId);
-  const snap = await getDoc(doc(db, 'schools', schoolId, 'assessments', id));
-  return snap.exists() ? snap.data() : null;
+  const q = query(
+    collection(db, 'schools', schoolId, 'assessments'),
+    where('skillId', '==', skillId),
+    where('studentId', '==', studentId),
+  );
+  const snap = await getDocs(q);
+  const assessment = snap.docs.find((d) => d.id === id);
+  return assessment ? assessment.data() : null;
 }
 
 // يعيد حساب ملخّص أسبوع كامل (عدد كل حالة) ويخزّنه جاهزًا على وثيقة الأسبوع نفسها،

@@ -1,7 +1,6 @@
 import {
   collection,
   doc,
-  getDoc,
   setDoc,
   getDocs,
   query,
@@ -29,18 +28,18 @@ export async function listRecommendationsForWeek(schoolId, weekId) {
   return map;
 }
 
-// يجيب توصية طالبة واحدة محددة بأسبوع معيّن — يستخدم بلوحة ولي الأمر، لأن قراءة
-// كل توصيات الأسبوع (listRecommendationsForWeek) ترفضها قواعد الأمان لولي الأمر
-// (يسمح له فقط بقراءة توصية طالبته). لو المستند غير موجود أصلاً (لا توجد توصية
-// لهذا الأسبوع)، يفشل تقييم قاعدة الأمان لأنها تتحقق من بيانات مستند فارغ —
-// هذا متوقع وليس خطأ حقيقي، فنرجّع نصًا فارغًا بهدوء بدل رمي الخطأ للواجهة.
+// Scope the query by student and week, not documentId: a missing document
+// must be an empty result under field-based parent rules. Keep genuine read
+// failures visible and preserve the existing canonical recommendation ID.
 export async function getStudentRecommendation(schoolId, weekId, studentId) {
-  try {
-    const snap = await getDoc(doc(db, 'schools', schoolId, 'weekRecommendations', recDocId(weekId, studentId)));
-    return snap.exists() ? snap.data().text || '' : '';
-  } catch {
-    return '';
-  }
+  const q = query(
+    collection(db, 'schools', schoolId, 'weekRecommendations'),
+    where('weekId', '==', weekId),
+    where('studentId', '==', studentId),
+  );
+  const snap = await getDocs(q);
+  const recommendation = snap.docs.find((d) => d.id === recDocId(weekId, studentId));
+  return recommendation ? recommendation.data().text || '' : '';
 }
 
 export async function setWeekRecommendation(schoolId, { weekId, classId, teacherUid, studentId, text }) {
