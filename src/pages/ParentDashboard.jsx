@@ -90,7 +90,9 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
             await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
             continue;
           }
-          setError(err.message || 'تعذّر تحميل بيانات المتابعة.');
+          setError(isPermissionError
+            ? 'تعذر تحميل بيانات المتابعة بسبب صلاحيات الوصول. يرجى التواصل مع إدارة المدرسة.'
+            : err.message || 'تعذّر تحميل بيانات المتابعة.');
           setLoading(false);
           return;
         }
