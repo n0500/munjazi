@@ -42,6 +42,37 @@ function skillGuidance(subject, skill) {
   return { type: 'none', text: 'لم تُضف توصية بعد.' };
 }
 
+export function summarizeSkills(rows = []) {
+  const mastered = rows.filter((s) => s.status === 'mastered').length;
+  const needsAttention = rows.filter((s) => s.status === 'notMastered' || s.status === 'needsSupport').length;
+  const absent = rows.filter((s) => s.status === 'absent').length;
+  const recorded = mastered + needsAttention + absent;
+  return {
+    mastered, needsAttention, absent, recorded,
+    total: rows.length,
+    unrecorded: rows.length - recorded,
+    fullyMastered: rows.length > 0 && mastered === rows.length,
+  };
+}
+
+export function parentSummaryNotice(subjects = []) {
+  const summary = summarizeSkills(subjects.flatMap((s) => s.skillRows || []));
+  const incomplete = summary.unrecorded > 0 || subjects.some((s) => !(s.skillRows || []).length);
+  if (summary.recorded === 0) return { positive: false, text: 'لم تسجل نتائج للطالبة بعد.' };
+  if (incomplete) return {
+    positive: false,
+    text: 'لم يكتمل رصد المهارات بعد.' + (summary.absent > 0 ? ' توجد مهارات سجل فيها غياب الطالبة.' : ''),
+  };
+  if (summary.absent > 0) return {
+    positive: false,
+    text: summary.absent === summary.total
+      ? 'سجل غياب الطالبة في جميع المهارات المعروضة، ولم يقيم إتقانها بعد.'
+      : 'توجد مهارات سجل فيها غياب الطالبة، ولا تحتسب ضمن المهارات المتقنة.',
+  };
+  if (summary.fullyMastered) return { positive: true, text: '✓ ممتاز، جميع المهارات المعروضة مرصودة ومتقنة.' };
+  return null;
+}
+
 export default function ParentDashboard({ schoolId, profile, logout }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -122,7 +153,8 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
     });
   }
 
-  const trackedSubjects = data.subjects.filter((s) => s.latestWeekId);
+  const trackedSubjects = data.subjects;
+  const summaryNotice = parentSummaryNotice(trackedSubjects);
 
   // إجماليات البطاقات الثلاث — من كل المهارات المرصودة بآخر أسبوع لكل مادة
   let masteredSkillsCount = 0;
@@ -186,11 +218,13 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
 
       <h3 style={{ fontSize: 16, margin: '0 0 10px', fontFamily: font.family }}>يحتاج متابعتك</h3>
 
-      {attentionItems.length === 0 ? (
-        <div style={{ background: colors.primaryTint, border: `1px solid ${colors.primary}`, color: '#0b5c33', borderRadius: radius.card, padding: spacing.md, marginBottom: spacing.xl, textAlign: 'center', fontSize: 13 }}>
-          ✓ ممتاز، لا توجد مهارات تحتاج متابعة حاليًا
+      {summaryNotice && (
+        <div style={{ background: summaryNotice.positive ? colors.primaryTint : '#f2f2f2', border: `1px solid ${summaryNotice.positive ? colors.primary : colors.border}`, color: summaryNotice.positive ? '#0b5c33' : colors.textMuted, borderRadius: radius.card, padding: spacing.md, marginBottom: spacing.lg, textAlign: 'center', fontSize: 13 }}>
+          {summaryNotice.text}
         </div>
-      ) : (
+      )}
+
+      {attentionItems.length > 0 && (
         <div style={{ marginBottom: spacing.xl }}>
           {attentionItems.map((item, i) => (
             <div key={i} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.md, marginBottom: spacing.sm }}>
@@ -225,10 +259,16 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
         trackedSubjects.map((s) => {
           const isExpanded = expandedSubjects.has(s.teacherUid);
           const enrichment = s.activeActions.find((a) => a.type === 'enrichment');
-          const absentCount = (s.skillRows || []).filter((sk) => sk.status === 'absent').length;
-          const fullyAbsent = s.totalSkills > 0 && absentCount === s.totalSkills;
-          const needsAttentionCount = (s.skillRows || []).filter((sk) => sk.status === 'notMastered' || sk.status === 'needsSupport').length;
-          const isFullyMastered = s.totalSkills > 0 && needsAttentionCount === 0 && !fullyAbsent;
+          const summary = summarizeSkills(s.skillRows || []);
+          const fullyAbsent = summary.total > 0 && summary.absent === summary.total;
+          const isFullyMastered = summary.fullyMastered;
+          const subjectSummary = summary.recorded === 0
+            ? 'لم تسجل نتائج لهذه المادة بعد'
+            : fullyAbsent
+              ? 'غائبة بالكامل هذا الأسبوع'
+              : `${summary.mastered} متقنة، ${summary.needsAttention} تحتاج متابعة`
+                + (summary.unrecorded > 0 ? `، ${summary.unrecorded} لم ترصد بعد` : '')
+                + (summary.absent > 0 ? `، ${summary.absent} غياب` : '');
 
           return (
             <div key={s.teacherUid} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, marginBottom: spacing.sm, overflow: 'hidden' }}>
@@ -240,7 +280,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                 <div style={{ flex: 1, marginRight: 10 }}>
                   <div style={{ fontWeight: 'bold', fontSize: 14, fontFamily: font.family, color: colors.ink }}>{s.subject}</div>
                   <div style={{ fontSize: 11, color: colors.textMuted }}>
-                    {fullyAbsent ? 'غائبة بالكامل هذا الأسبوع' : `${s.masteredCount} متقنة، ${needsAttentionCount} تحتاج متابعة`}
+                    {subjectSummary}
                   </div>
                 </div>
               </button>
@@ -252,7 +292,7 @@ export default function ParentDashboard({ schoolId, profile, logout }) {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: spacing.sm }}>
                     {(s.skillRows || []).map((sk, i) => (
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
-                        <SkillBadge status={sk.status} statusLabel={sk.statusLabel} />
+                        <SkillBadge status={sk.status} statusLabel={STATUS_COLORS[sk.status] ? sk.statusLabel : 'لم ترصد بعد'} />
                         <span>{sk.title}</span>
                       </div>
                     ))}
