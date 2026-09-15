@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { loginOwner, loginAdmin, loginTeacher, loginParent } from '../lib/auth';
+import { loginOwner, loginAdmin, loginTeacher, loginParent, requestPasswordReset } from '../lib/auth';
 import { registerTeacher } from '../lib/teachersApi';
 import Logo from '../components/Logo';
 import Footer from '../components/Footer';
@@ -28,6 +28,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
 
   function resetMsgs() {
     setError('');
@@ -51,6 +52,32 @@ export default function Login() {
       setError(err.message || 'تعذّر تسجيل الدخول.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    resetMsgs();
+    if (resetBusy) return;
+    if (!email.trim()) {
+      setError('أدخلي البريد الإلكتروني أولًا، ثم اختاري «نسيت كلمة المرور؟».');
+      return;
+    }
+    setResetBusy(true);
+    try {
+      await requestPasswordReset(email);
+      setSuccessMsg('تم إرسال رابط إعادة تعيين كلمة المرور إلى البريد الإلكتروني. يُرجى التحقق من الوارد والرسائل غير المرغوب فيها.');
+    } catch (err) {
+      if (err?.code === 'auth/user-not-found') {
+        setSuccessMsg('إذا كان البريد الإلكتروني مسجلاً في منجزي فسيصل إليه رابط إعادة تعيين كلمة المرور.');
+      } else if (err?.code === 'auth/invalid-email') {
+        setError('البريد الإلكتروني غير صحيح.');
+      } else if (err?.code === 'auth/too-many-requests') {
+        setError('تم إرسال عدة طلبات خلال وقت قصير. يُرجى المحاولة لاحقًا.');
+      } else {
+        setError(err.message || 'تعذّر إرسال رابط إعادة تعيين كلمة المرور.');
+      }
+    } finally {
+      setResetBusy(false);
     }
   }
 
@@ -89,6 +116,17 @@ export default function Login() {
   const submitStyle = { width: '100%', padding: 12, background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button };
   const linkStyle = { background: 'none', border: 'none', color: colors.primary, textDecoration: 'underline' };
   const linkStyleMuted = { background: 'none', border: 'none', color: colors.textMuted, textDecoration: 'underline' };
+
+  const forgotPasswordButton = (
+    <button
+      type="button"
+      onClick={handleForgotPassword}
+      disabled={resetBusy}
+      style={{ ...linkStyle, fontSize: 13, opacity: resetBusy ? 0.6 : 1 }}
+    >
+      {resetBusy ? '...جارٍ الإرسال' : 'نسيت كلمة المرور؟'}
+    </button>
+  );
 
   return (
     <div>
@@ -129,6 +167,7 @@ export default function Login() {
             <label>كلمة المرور</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
             <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
+            <p style={{ textAlign: 'center', marginTop: spacing.sm, marginBottom: 0 }}>{forgotPasswordButton}</p>
             <p style={{ textAlign: 'center', marginTop: 4 }}>
               <button type="button" onClick={() => setOwnerMode(true)} style={linkStyleMuted}>دخول حساب المالك</button>
             </p>
@@ -142,6 +181,7 @@ export default function Login() {
             <label>كلمة المرور</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
             <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
+            <p style={{ textAlign: 'center', marginTop: spacing.sm, marginBottom: 0 }}>{forgotPasswordButton}</p>
             <p style={{ textAlign: 'center', marginTop: spacing.md }}>
               <button type="button" onClick={() => { setRegisterMode(true); resetMsgs(); }} style={linkStyle}>
                 إنشاء حساب معلّمة جديدة
@@ -174,6 +214,7 @@ export default function Login() {
             <label>كلمة المرور</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
             <button type="submit" disabled={busy} style={submitStyle}>{busy ? '...' : 'تسجيل الدخول'}</button>
+            <p style={{ textAlign: 'center', marginTop: spacing.sm, marginBottom: 0 }}>{forgotPasswordButton}</p>
             <p style={{ textAlign: 'center', marginTop: spacing.md }}>
               <button type="button" onClick={() => setOwnerMode(false)} style={linkStyleMuted}>عودة</button>
             </p>
