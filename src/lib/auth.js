@@ -1,6 +1,7 @@
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -56,6 +57,12 @@ export async function loginTeacher(email, password) {
     throw new Error('هذا الحساب ليس حساب معلّمة.');
   }
   return user;
+}
+
+export async function requestPasswordReset(email) {
+  const trimmedEmail = (email || '').trim();
+  if (!trimmedEmail) throw new Error('أدخلي البريد الإلكتروني أولًا.');
+  await sendPasswordResetEmail(auth, trimmedEmail);
 }
 
 export async function loginParent(nationalId) {
