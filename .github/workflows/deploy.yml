@@ -38,16 +38,19 @@ jobs:
 
             if [ ! -f "$APP_ROOT/package.json" ]; then
               PACKAGE_FILE="$(find .deploy-src -mindepth 1 -maxdepth 3 -type f -name package.json -print -quit)"
+
               if [ -z "$PACKAGE_FILE" ]; then
                 echo "::error::The ZIP does not contain package.json"
                 exit 1
               fi
+
               APP_ROOT="$(dirname "$PACKAGE_FILE")"
             fi
 
             cp -a "$APP_ROOT"/. .deploy-app/
           else
-            echo "munjazi-update.zip not found; building the repository source."
+            echo "munjazi-update.zip not found; building repository source."
+
             rsync -a \
               --exclude ".git" \
               --exclude ".deploy-src" \
@@ -65,10 +68,10 @@ jobs:
             exit 1
           }
 
-          test -d .deploy-app/src || {
-            echo "::error::src folder is missing"
+          if [ ! -d .deploy-app/src ] && [ ! -d .deploy-app/app ]; then
+            echo "::error::Neither src nor app source folder exists"
             exit 1
-          }
+          fi
 
           echo "Source validation passed."
 
@@ -89,6 +92,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           test -f .deploy-app/dist/index.html || {
             echo "::error::Build completed without dist/index.html"
             exit 1
