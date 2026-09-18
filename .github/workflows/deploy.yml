@@ -9,21 +9,100 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare app source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf .deploy-src .deploy-app
+          mkdir -p .deploy-app
+
+          if [ -f "munjazi-update.zip" ]; then
+            echo "Using munjazi-update.zip"
+            mkdir -p .deploy-src
+            unzip -q "munjazi-update.zip" -d .deploy-src
+
+            APP_ROOT=".deploy-src"
+
+            if [ ! -f "$APP_ROOT/package.json" ]; then
+              PACKAGE_FILE="$(find .deploy-src -mindepth 1 -maxdepth 3 -type f -name package.json -print -quit)"
+              if [ -z "$PACKAGE_FILE" ]; then
+                echo "::error::The ZIP does not contain package.json"
+                exit 1
+              fi
+              APP_ROOT="$(dirname "$PACKAGE_FILE")"
+            fi
+
+            cp -a "$APP_ROOT"/. .deploy-app/
+          else
+            echo "munjazi-update.zip not found; building the repository source."
+            rsync -a \
+              --exclude ".git" \
+              --exclude ".deploy-src" \
+              --exclude ".deploy-app" \
+              ./ .deploy-app/
+          fi
+
+          test -f .deploy-app/package.json || {
+            echo "::error::package.json is missing"
+            exit 1
+          }
+
+          test -f .deploy-app/index.html || {
+            echo "::error::index.html is missing"
+            exit 1
+          }
+
+          test -d .deploy-app/src || {
+            echo "::error::src folder is missing"
+            exit 1
+          }
+
+          echo "Source validation passed."
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
-      - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
+
+      - name: Install dependencies
+        working-directory: .deploy-app
+        run: npm install
+
+      - name: Build
+        working-directory: .deploy-app
+        run: npm run build
+
+      - name: Verify build output
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .deploy-app/dist/index.html || {
+            echo "::error::Build completed without dist/index.html"
+            exit 1
+          }
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
-      - id: deployment
+          path: .deploy-app/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
