@@ -38,337 +38,22 @@ jobs:
 
             if [ ! -f "$APP_ROOT/package.json" ]; then
               PACKAGE_FILE="$(find .deploy-src -mindepth 1 -maxdepth 3 -type f -name package.json -print -quit)"
-
               if [ -z "$PACKAGE_FILE" ]; then
                 echo "::error::The ZIP does not contain package.json"
                 exit 1
               fi
-
               APP_ROOT="$(dirname "$PACKAGE_FILE")"
             fi
 
             cp -a "$APP_ROOT"/. .deploy-app/
           else
-            echo "munjazi-update.zip not found; building repository source."
-
+            echo "munjazi-update.zip not found; building the repository source."
             rsync -a \
               --exclude ".git" \
               --exclude ".deploy-src" \
               --exclude ".deploy-app" \
               ./ .deploy-app/
           fi
-
-          if [ -f ".deploy-app/app/lib/parentReviewAckApi.js" ]; then
-            TARGET=".deploy-app/app/lib/parentReviewAckApi.js"
-          elif [ -f ".deploy-app/src/lib/parentReviewAckApi.js" ]; then
-            TARGET=".deploy-app/src/lib/parentReviewAckApi.js"
-          else
-            echo "::error::parentReviewAckApi.js was not found in the prepared app source"
-            exit 1
-          fi
-
-          cat > "$TARGET" <<'MUNJAZI_PATCH'
-import { collection, doc, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './firebase.js';
-
-const WEAK_STATUSES = new Set(['needsSupport', 'notMastered']);
-
-export function parentReviewAckDocId(weekId, studentId) {
-  return `${weekId}_${studentId}`;
-}
-
-export async function logParentReviewAcknowledgment(schoolId, {
-  weekId,
-  studentId,
-  parentUid,
-  assignmentId = null,
-  classId = null,
-  teacherUid = null,
-  subject = '',
-}) {
-  if (!weekId || !studentId) return;
-
-  await setDoc(
-    doc(
-      db,
-      'schools',
-      schoolId,
-      'parentReviewAcknowledgments',
-      parentReviewAckDocId(weekId, studentId),
-    ),
-    {
-      weekId,
-      studentId,
-      parentUid: parentUid || null,
-      assignmentId: assignmentId || null,
-      classId: classId || null,
-      teacherUid: teacherUid || null,
-      subject: subject || '',
-      viewedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
-}
-
-function seconds(value) {
-  if (!value) return 0;
-  if (typeof value.seconds === 'number') return value.seconds;
-
-  const date = value.toDate ? value.toDate() : new Date(value);
-  const ms = date.getTime();
-  return Number.isFinite(ms) ? Math.floor(ms / 1000) : 0;
-}
-
-function studentIdFromAssessmentDoc(documentId, skillId) {
-  if (!documentId || !skillId) return null;
-  const prefix = `${skillId}_`;
-  return documentId.startsWith(prefix)
-    ? documentId.slice(prefix.length)
-    : null;
-}
-
-function resolveStudent(students, assessment, assessmentDocId) {
-  const rawStudentId = assessment.studentId || null;
-  const documentStudentId = studentIdFromAssessmentDoc(
-    assessmentDocId,
-    assessment.skillId,
-  );
-
-  if (rawStudentId && students[rawStudentId]) {
-    return students[rawStudentId];
-  }
-
-  if (documentStudentId && students[documentStudentId]) {
-    return students[documentStudentId];
-  }
-
-  return Object.values(students).find((student) => (
-    student.studentId === rawStudentId
-    || student.legacyId === rawStudentId
-    || student.studentId === documentStudentId
-    || student.legacyId === documentStudentId
-  )) || null;
-}
-
-function findAssignment(assignments, {
-  assignmentId = null,
-  classId = null,
-  teacherUid = null,
-}) {
-  if (assignmentId && assignments[assignmentId]) {
-    return assignments[assignmentId];
-  }
-
-  const rows = Object.values(assignments);
-
-  if (classId && teacherUid) {
-    const matches = rows.filter(
-      (row) => row.classId === classId && row.teacherUid === teacherUid,
-    );
-    if (matches.length === 1) return matches[0];
-  }
-
-  if (classId) {
-    const matches = rows.filter((row) => row.classId === classId);
-    if (matches.length === 1) return matches[0];
-  }
-
-  return null;
-}
-
-export async function listParentReviewAttentionItems(
-  schoolId,
-  { teacherUid = null } = {},
-) {
-  const root = (...parts) => collection(db, 'schools', schoolId, ...parts);
-
-  const [
-    assessmentSnap,
-    skillSnap,
-    weekSnap,
-    studentSnap,
-    assignmentSnap,
-    classSnap,
-    ackSnap,
-  ] = await Promise.all([
-    getDocs(root('assessments')),
-    getDocs(root('skills')),
-    getDocs(root('weeks')),
-    getDocs(root('students')),
-    getDocs(root('classTeacherAssignments')),
-    getDocs(root('classes')),
-    getDocs(root('parentReviewAcknowledgments')),
-  ]);
-
-  const skills = Object.fromEntries(
-    skillSnap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]),
-  );
-  const weeks = Object.fromEntries(
-    weekSnap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]),
-  );
-  const students = Object.fromEntries(
-    studentSnap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]),
-  );
-  const assignments = Object.fromEntries(
-    assignmentSnap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]),
-  );
-  const classes = Object.fromEntries(
-    classSnap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]),
-  );
-  const acknowledgments = Object.fromEntries(
-    ackSnap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]),
-  );
-
-  const activeWeekIds = new Set(
-    Object.values(weeks)
-      .filter((week) => week.archived !== true && week.deleted !== true)
-      .map((week) => week.id),
-  );
-
-  const grouped = new Map();
-
-  assessmentSnap.docs.forEach((d) => {
-    const a = { id: d.id, ...d.data() };
-
-    if (!WEAK_STATUSES.has(a.status) || !a.weekId) return;
-    if (!activeWeekIds.has(a.weekId)) return;
-
-    const week = weeks[a.weekId] || {};
-    if (week.archived === true || week.deleted === true) return;
-
-    const resolvedTeacherUid = a.teacherUid || week.teacherUid || null;
-    if (teacherUid && resolvedTeacherUid !== teacherUid) return;
-
-    const student = resolveStudent(students, a, d.id);
-
-    // لا نخفي طالبة موجودة بسبب اختلاف قديم في المعرّف.
-    // إذا لم نجد أي طالبة حقيقية بعد جميع مسارات المطابقة،
-    // فهذا سجل تقييم يتيم قديم ولا يجب عرضه كـ "طالبة غير محددة".
-    if (!student) {
-      console.warn('Munjazi: orphan assessment skipped in parent review tracking', {
-        assessmentId: d.id,
-        studentId: a.studentId || null,
-        weekId: a.weekId,
-      });
-      return;
-    }
-
-    let resolvedAssignmentId = a.assignmentId || week.assignmentId || null;
-    let resolvedClassId = a.classId || week.classId || null;
-
-    let assignment = findAssignment(assignments, {
-      assignmentId: resolvedAssignmentId,
-      classId: resolvedClassId,
-      teacherUid: resolvedTeacherUid,
-    });
-
-    if (!resolvedClassId) {
-      resolvedClassId = assignment?.classId || student.currentClassId || null;
-    }
-
-    if (!assignment) {
-      assignment = findAssignment(assignments, {
-        assignmentId: resolvedAssignmentId,
-        classId: resolvedClassId,
-        teacherUid: resolvedTeacherUid,
-      });
-    }
-
-    if (!resolvedAssignmentId) {
-      resolvedAssignmentId = assignment?.id || null;
-    }
-
-    const resolvedStudentId = student.id;
-    const key = `${a.weekId}__${resolvedStudentId}`;
-
-    if (!grouped.has(key)) {
-      grouped.set(key, {
-        weekId: a.weekId,
-        weekName: week.name || 'أسبوع غير محدد',
-        weekType: week.type || null,
-        weekTypeLabel:
-          week.type === 'remediation'
-            ? 'معالجة'
-            : week.type === 'measurement'
-              ? 'قياس'
-              : '—',
-        studentId: resolvedStudentId,
-        studentName: student.name || a.studentName || 'طالبة',
-        assignmentId: resolvedAssignmentId,
-        classId: resolvedClassId,
-        className: classes[resolvedClassId]?.name || 'فصل غير محدد',
-        teacherUid: resolvedTeacherUid,
-        teacherName:
-          assignment?.teacherName
-          || week.teacherName
-          || 'معلمة غير محددة',
-        subject:
-          assignment?.subject
-          || week.subject
-          || 'مادة غير محددة',
-        weakSkills: [],
-        notMasteredCount: 0,
-        needsSupportCount: 0,
-        lastAssessmentAtSeconds: 0,
-      });
-    }
-
-    const row = grouped.get(key);
-    const skillTitle = skills[a.skillId]?.title || 'مهارة غير محددة';
-
-    if (!row.weakSkills.some((x) => x.skillId === a.skillId)) {
-      row.weakSkills.push({
-        skillId: a.skillId,
-        title: skillTitle,
-        status: a.status,
-      });
-    }
-
-    if (a.status === 'notMastered') {
-      row.notMasteredCount += 1;
-    } else if (a.status === 'needsSupport') {
-      row.needsSupportCount += 1;
-    }
-
-    row.lastAssessmentAtSeconds = Math.max(
-      row.lastAssessmentAtSeconds,
-      seconds(a.updatedAt),
-    );
-  });
-
-  return [...grouped.values()]
-    .map((row) => {
-      const ack = acknowledgments[
-        parentReviewAckDocId(row.weekId, row.studentId)
-      ] || null;
-
-      const viewedAtSeconds = seconds(ack?.viewedAt);
-      const viewedCurrent =
-        viewedAtSeconds > 0
-        && (
-          row.lastAssessmentAtSeconds === 0
-          || viewedAtSeconds >= row.lastAssessmentAtSeconds
-        );
-
-      return {
-        ...row,
-        parentAcknowledgment: ack,
-        viewedAt: ack?.viewedAt || null,
-        viewedCurrent,
-      };
-    })
-    .sort((a, b) => {
-      if (a.viewedCurrent !== b.viewedCurrent) {
-        return a.viewedCurrent ? 1 : -1;
-      }
-      return b.lastAssessmentAtSeconds - a.lastAssessmentAtSeconds;
-    });
-}
-
-MUNJAZI_PATCH
-
-          echo "Applied parent review tracking hotfix."
 
           test -f .deploy-app/package.json || {
             echo "::error::package.json is missing"
@@ -379,6 +64,11 @@ MUNJAZI_PATCH
             echo "::error::index.html is missing"
             exit 1
           }
+
+          if [ ! -d .deploy-app/src ] && [ ! -d .deploy-app/app ]; then
+            echo "::error::Neither src nor app source folder exists"
+            exit 1
+          fi
 
           echo "Source validation passed."
 
@@ -399,7 +89,6 @@ MUNJAZI_PATCH
         shell: bash
         run: |
           set -euo pipefail
-
           test -f .deploy-app/dist/index.html || {
             echo "::error::Build completed without dist/index.html"
             exit 1
