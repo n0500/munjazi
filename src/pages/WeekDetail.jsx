@@ -33,6 +33,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
   const [autoFilling, setAutoFilling] = useState(false);
   const [checkingActions, setCheckingActions] = useState(false);
   const [autoCheckNotice, setAutoCheckNotice] = useState(false);
+  const [recommendationSaveState, setRecommendationSaveState] = useState({});
 
   const [editingSkillId, setEditingSkillId] = useState(null);
   const [editSkillTitleValue, setEditSkillTitleValue] = useState('');
@@ -44,6 +45,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
   const [savingLink, setSavingLink] = useState(false);
 
   const autoCheckTimer = useRef(null);
+  const recommendationSaveTimers = useRef({});
 
   // يعيد بناء قائمة الإجراءات النشطة الظاهرة بعمود الإجراء لكل طالبة. الإجراء العلاجي
   // يظهر بلا شرط طالما لا يزال نشطًا (متابعة مستمرة حتى الإغلاق اليدوي). أما الإجراء
@@ -106,6 +108,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
   useEffect(() => {
     return () => {
       if (autoCheckTimer.current) clearTimeout(autoCheckTimer.current);
+      Object.values(recommendationSaveTimers.current).forEach((timer) => clearTimeout(timer));
     };
   }, []);
 
@@ -240,6 +243,49 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
     }
   }
 
+  function clearRecommendationSaveTimer(studentId) {
+    const timer = recommendationSaveTimers.current[studentId];
+    if (timer) {
+      clearTimeout(timer);
+      delete recommendationSaveTimers.current[studentId];
+    }
+  }
+
+  async function saveRecommendation(studentId, text) {
+    clearRecommendationSaveTimer(studentId);
+    setRecommendationSaveState((prev) => ({ ...prev, [studentId]: 'saving' }));
+    try {
+      await setWeekRecommendation(schoolId, {
+        weekId: week.id,
+        classId,
+        teacherUid,
+        studentId,
+        text: text || '',
+      });
+      setRecommendationSaveState((prev) => ({ ...prev, [studentId]: 'saved' }));
+      setTimeout(() => {
+        setRecommendationSaveState((prev) => {
+          if (prev[studentId] !== 'saved') return prev;
+          const next = { ...prev };
+          delete next[studentId];
+          return next;
+        });
+      }, 1800);
+    } catch (err) {
+      setRecommendationSaveState((prev) => ({ ...prev, [studentId]: 'error' }));
+      setError(err.message || 'تعذّر حفظ التوصية.');
+      throw err;
+    }
+  }
+
+  function scheduleRecommendationSave(studentId, text) {
+    clearRecommendationSaveTimer(studentId);
+    setRecommendationSaveState((prev) => ({ ...prev, [studentId]: 'pending' }));
+    recommendationSaveTimers.current[studentId] = setTimeout(() => {
+      saveRecommendation(studentId, text).catch(() => {});
+    }, 650);
+  }
+
   async function handleRecommendationSelect(studentId, status, value) {
     setError('');
     if (value === NEW_RECOMMENDATION_VALUE) {
@@ -247,7 +293,7 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
       if (!text || !text.trim()) return;
       try {
         if (status) await addCustomRecommendation(schoolId, teacherUid, status, text);
-        await setWeekRecommendation(schoolId, { weekId: week.id, classId, teacherUid, studentId, text: text.trim() });
+        await saveRecommendation(studentId, text.trim());
         setWeekRecommendations((prev) => ({ ...prev, [studentId]: text.trim() }));
         if (status) {
           const updated = await listAllRecommendationsForStatus(schoolId, teacherUid, status);
@@ -259,23 +305,24 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
       return;
     }
     try {
-      await setWeekRecommendation(schoolId, { weekId: week.id, classId, teacherUid, studentId, text: value });
+      await saveRecommendation(studentId, value);
       setWeekRecommendations((prev) => ({ ...prev, [studentId]: value }));
-    } catch (err) {
-      setError(err.message || 'تعذّر حفظ التوصية.');
+    } catch {
+      // saveRecommendation تعرض رسالة الخطأ
     }
   }
 
-  async function handleRecommendationTextEdit(studentId, text) {
+  function handleRecommendationTextEdit(studentId, text) {
     setWeekRecommendations((prev) => ({ ...prev, [studentId]: text }));
+    scheduleRecommendationSave(studentId, text);
   }
 
-  async function handleRecommendationTextSave(studentId) {
+  async function handleRecommendationTextSave(studentId, text) {
     setError('');
     try {
-      await setWeekRecommendation(schoolId, { weekId: week.id, classId, teacherUid, studentId, text: weekRecommendations[studentId] || '' });
-    } catch (err) {
-      setError(err.message || 'تعذّر حفظ التوصية.');
+      await saveRecommendation(studentId, text);
+    } catch {
+      // saveRecommendation تعرض رسالة الخطأ
     }
   }
 
@@ -468,10 +515,40 @@ export default function WeekDetail({ schoolId, classId, teacherUid, week, onBack
                       <textarea
                         value={weekRecommendations[student.id] || ''}
                         onChange={(e) => handleRecommendationTextEdit(student.id, e.target.value)}
-                        onBlur={() => handleRecommendationTextSave(student.id)}
+                        onBlur={(e) => handleRecommendationTextSave(student.id, e.target.value)}
                         placeholder="التوصية قابلة للتعديل"
                         style={{ padding: 4, width: '100%', fontSize: 12, minHeight: 40 }}
                       />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                        <span style={{
+                          fontSize: 11,
+                          color: recommendationSaveState[student.id] === 'error'
+                            ? colors.red
+                            : recommendationSaveState[student.id] === 'saved'
+                              ? '#0b5c33'
+                              : colors.textMuted,
+                        }}>
+                          {recommendationSaveState[student.id] === 'pending' && 'سيتم الحفظ تلقائيًا'}
+                          {recommendationSaveState[student.id] === 'saving' && 'جارٍ الحفظ...'}
+                          {recommendationSaveState[student.id] === 'saved' && '✓ تم الحفظ'}
+                          {recommendationSaveState[student.id] === 'error' && 'تعذّر الحفظ'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRecommendationTextSave(student.id, weekRecommendations[student.id] || '')}
+                          disabled={recommendationSaveState[student.id] === 'saving'}
+                          style={{
+                            padding: '3px 8px',
+                            background: colors.primaryTint,
+                            border: `1px solid ${colors.primary}`,
+                            color: '#0b5c33',
+                            borderRadius: 6,
+                            fontSize: 11,
+                          }}
+                        >
+                          حفظ الآن
+                        </button>
+                      </div>
                     </td>
                     <td style={{ padding: 6 }}>
                       <ActionColumn
