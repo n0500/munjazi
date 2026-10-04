@@ -11,6 +11,34 @@ const TABS = [
   { key: 'parent', label: 'ولي الأمر' },
 ];
 
+function getStaffLoginErrorMessage(err) {
+  const code = err?.code || '';
+
+  if (['auth/invalid-credential', 'auth/user-not-found', 'auth/wrong-password'].includes(code)) {
+    return 'بيانات الدخول غير صحيحة. تأكدي من البريد الإلكتروني وكلمة المرور ثم حاولي مرة أخرى.';
+  }
+  if (code === 'auth/invalid-email') {
+    return 'يرجى التأكد من صحة البريد الإلكتروني.';
+  }
+  if (code === 'auth/user-disabled') {
+    return 'هذا الحساب معطّل حاليًا. تواصلي مع إدارة المدرسة.';
+  }
+  if (code === 'auth/too-many-requests') {
+    return 'تمت عدة محاولات تسجيل دخول خلال وقت قصير. انتظري قليلًا ثم حاولي مرة أخرى.';
+  }
+  if (code === 'auth/network-request-failed') {
+    return 'تعذّر الاتصال. تحققي من اتصال الإنترنت ثم حاولي مرة أخرى.';
+  }
+
+  // نعرض رسائل منجزي المخصصة، ولا نعرض رسائل Firebase التقنية للمستخدمة.
+  const message = typeof err?.message === 'string' ? err.message.trim() : '';
+  if (message && !message.startsWith('Firebase:') && !code.startsWith('auth/')) {
+    return message;
+  }
+
+  return 'حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.';
+}
+
 export default function Login() {
   const params = new URLSearchParams(window.location.search);
   const directParentLink = params.get('role') === 'parent';
@@ -49,7 +77,7 @@ export default function Login() {
         await loginTeacher(email, password);
       }
     } catch (err) {
-      setError(err.message || 'تعذّر تسجيل الدخول.');
+      setError(getStaffLoginErrorMessage(err));
     } finally {
       setBusy(false);
     }
