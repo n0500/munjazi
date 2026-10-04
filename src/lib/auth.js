@@ -62,7 +62,15 @@ export async function loginTeacher(email, password) {
 export async function requestPasswordReset(email) {
   const trimmedEmail = (email || '').trim();
   if (!trimmedEmail) throw new Error('أدخلي البريد الإلكتروني أولًا.');
-  await sendPasswordResetEmail(auth, trimmedEmail);
+
+  // إرسال رسالة الاستعادة باللغة العربية، بما في ذلك صفحة إعادة التعيين الافتراضية.
+  const previousLanguageCode = auth.languageCode;
+  auth.languageCode = 'ar';
+  try {
+    await sendPasswordResetEmail(auth, trimmedEmail);
+  } finally {
+    auth.languageCode = previousLanguageCode;
+  }
 }
 
 export async function loginParent(nationalId) {
