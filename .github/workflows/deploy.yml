@@ -29,31 +29,13 @@ jobs:
           rm -rf .deploy-src .deploy-app
           mkdir -p .deploy-app
 
-          if [ -f "munjazi-update.zip" ]; then
-            echo "Using munjazi-update.zip"
-            mkdir -p .deploy-src
-            unzip -q "munjazi-update.zip" -d .deploy-src
-
-            APP_ROOT=".deploy-src"
-
-            if [ ! -f "$APP_ROOT/package.json" ]; then
-              PACKAGE_FILE="$(find .deploy-src -mindepth 1 -maxdepth 3 -type f -name package.json -print -quit)"
-              if [ -z "$PACKAGE_FILE" ]; then
-                echo "::error::The ZIP does not contain package.json"
-                exit 1
-              fi
-              APP_ROOT="$(dirname "$PACKAGE_FILE")"
-            fi
-
-            cp -a "$APP_ROOT"/. .deploy-app/
-          else
-            echo "munjazi-update.zip not found; building the repository source."
-            rsync -a \
-              --exclude ".git" \
-              --exclude ".deploy-src" \
-              --exclude ".deploy-app" \
-              ./ .deploy-app/
-          fi
+          echo "Building the current repository source."
+          rsync -a \
+            --exclude ".git" \
+            --exclude ".deploy-src" \
+            --exclude ".deploy-app" \
+            --exclude "munjazi-update.zip" \
+            ./ .deploy-app/
 
           test -f .deploy-app/package.json || {
             echo "::error::package.json is missing"
