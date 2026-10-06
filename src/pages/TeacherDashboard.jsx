@@ -4,6 +4,7 @@ import { listActionsForTeacher } from '../lib/actionEngine';
 import ClassWeeks from './ClassWeeks';
 import RecommendationsLibrary from './RecommendationsLibrary';
 import TeacherOverview from './TeacherOverview';
+import AllClassesAnalysis from './AllClassesAnalysis';
 import RemediationPlans from './RemediationPlans';
 import AckTracking from './AckTracking';
 import { colors, font, radius, spacing } from '../lib/theme';
@@ -11,6 +12,7 @@ import { colors, font, radius, spacing } from '../lib/theme';
 const TABS = [
   { key: 'home', label: 'الرئيسية' },
   { key: 'overview', label: 'نظرة عامة' },
+  { key: 'reports', label: 'التقارير' },
   { key: 'plans', label: 'الخطط العلاجية' },
   { key: 'ack', label: 'متابعة الاطلاع' },
   { key: 'library', label: 'مكتبة التوصيات' },
@@ -138,7 +140,7 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
   }
 
   return (
-    <div style={{ maxWidth: 700, margin: '20px auto', padding: 16 }} dir="rtl">
+    <div style={{ maxWidth: activeTab === 'reports' ? 1100 : 700, margin: '20px auto', padding: 16 }} dir="rtl">
       <h1 style={{ fontFamily: font.family }}>لوحة المعلّمة</h1>
 
       <div style={{ display: 'flex', gap: 4, overflowX: 'auto', borderBottom: `1px solid ${colors.border}`, marginBottom: 20 }}>
@@ -167,6 +169,7 @@ export default function TeacherDashboard({ schoolId, teacherUid, teacherName }) 
       {error && <div style={{ background: colors.redTint, color: colors.red, padding: 10, borderRadius: radius.button, marginBottom: 16 }}>{error}</div>}
 
       {activeTab === 'overview' && <TeacherOverview schoolId={schoolId} teacherUid={teacherUid} onBack={() => setActiveTab('home')} />}
+      {activeTab === 'reports' && <AllClassesAnalysis schoolId={schoolId} teacherUid={teacherUid} teacherName={teacherName} onBack={() => setActiveTab('home')} />}
       {activeTab === 'plans' && <RemediationPlans schoolId={schoolId} teacherUid={teacherUid} teacherName={teacherName} onBack={() => setActiveTab('home')} />}
       {activeTab === 'ack' && <AckTracking schoolId={schoolId} teacherUid={teacherUid} onBack={() => setActiveTab('home')} />}
       {activeTab === 'library' && <RecommendationsLibrary schoolId={schoolId} teacherUid={teacherUid} onBack={() => setActiveTab('home')} />}
