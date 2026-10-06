@@ -340,8 +340,7 @@ export async function buildEnhancedAllClassesAnalysisData(schoolId, {
   const strongestSkills = skills.slice().sort((a, b) => b.masteryPercent - a.masteryPercent).slice(0, 5);
   const heatmap = buildHeatmap(classes, problemSkills);
   const overallTrend = aggregateTrend(classes);
-  const remediation = buildRemediationImpact({ trend: classes.flatMap((row) => row.trend) });
-  // buildRemediationImpact needs class context; aggregate class-by-class instead.
+  // Aggregate remediation impact class-by-class so student movement stays scoped correctly.
   const remediationRows = [];
   const movement = { improved: 0, stable: 0, declined: 0, toMastered: 0 };
   classes.forEach((row) => {
