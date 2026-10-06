@@ -264,51 +264,6 @@ export default function TeacherReports({ schoolId, teacherUid, teacherName, assi
     {success && <div style={{ background: colors.primaryTint, color: '#0b5c33', padding: 10, borderRadius: radius.button, marginBottom: spacing.md }}>{success}</div>}
 
     {assignments.length === 0 ? <p style={{ color: colors.textMuted }}>لا توجد إسنادات نشطة لإعداد التقارير.</p> : <>
-      <div style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.md }}>
-        <h3 style={{ marginTop: 0, fontFamily: font.family }}>التقارير الشاملة</h3>
-        <p style={{ fontSize: 12, color: colors.textMuted, marginTop: 0 }}>
-          حددي الفترة مرة واحدة، ثم اختاري التقرير المطلوب.
-        </p>
-
-        {periodLoading ? <p style={{ color: colors.textMuted, fontSize: 13 }}>جارٍ تحميل الأسابيع...</p> : opts.length === 0 ? <p style={{ color: colors.textMuted, fontSize: 13 }}>لا توجد أسابيع متاحة لإعداد التقارير الشاملة.</p> : <>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-            <label style={{ flex: '1 1 170px', fontSize: 13 }}>
-              من أسبوع
-              <select value={fromWeekName} onChange={(e) => setFromWeekName(e.target.value)} style={{ width: '100%', padding: 9, marginTop: 4 }}>
-                {opts.map((n) => <option key={`f-${n}`} value={n}>{n}</option>)}
-              </select>
-            </label>
-            <label style={{ flex: '1 1 170px', fontSize: 13 }}>
-              إلى أسبوع
-              <select value={toWeekName} onChange={(e) => setToWeekName(e.target.value)} style={{ width: '100%', padding: 9, marginTop: 4 }}>
-                {opts.map((n) => <option key={`t-${n}`} value={n}>{n}</option>)}
-              </select>
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              onClick={downloadAllClasses}
-              disabled={!!generating}
-              style={{ flex: '1 1 210px', padding: '10px 14px', background: colors.ink, color: '#fff', border: 'none', borderRadius: radius.button, fontWeight: 'bold' }}
-            >
-              {generating === 'classes' ? 'جارٍ التوليد...' : 'تحليل نتائج جميع الفصول'}
-            </button>
-            <button
-              onClick={downloadImpact}
-              disabled={!!generating}
-              style={{ flex: '1 1 210px', padding: '10px 14px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button, fontWeight: 'bold' }}
-            >
-              {generating === 'impact' ? 'جارٍ التوليد...' : 'تقرير الأثر العام'}
-            </button>
-          </div>
-
-          <p style={{ fontSize: 11, color: colors.textMuted, marginBottom: 0, marginTop: 8 }}>
-            تحليل جميع الفصول يتضمن الرسوم البيانية، الاتجاه عبر الأسابيع، الخريطة الحرارية للمهارات، أثر المعالجة، التنبيهات والأولويات.
-          </p>
-        </>}
-      </div>
-
       <div style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.lg }}>
         <h3 style={{ marginTop: 0, fontFamily: font.family }}>تقارير الفصل والطالبة</h3>
 
@@ -393,6 +348,51 @@ export default function TeacherReports({ schoolId, teacherUid, teacherName, assi
           <button onClick={() => setMode('student')} style={{ flex: '1 1 180px', padding: '12px 16px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button }}>تقرير طالبة</button>
           <button onClick={() => setMode('class')} style={{ flex: '1 1 180px', padding: '12px 16px', background: colors.ink, color: '#fff', border: 'none', borderRadius: radius.button }}>تقرير الفصل</button>
         </div>}
+      </div>
+
+      <div style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.md }}>
+        <h3 style={{ marginTop: 0, fontFamily: font.family }}>التقارير الشاملة</h3>
+        <p style={{ fontSize: 12, color: colors.textMuted, marginTop: 0 }}>
+          حددي الفترة مرة واحدة، ثم اختاري التقرير المطلوب.
+        </p>
+
+        {periodLoading ? <p style={{ color: colors.textMuted, fontSize: 13 }}>جارٍ تحميل الأسابيع...</p> : opts.length === 0 ? <p style={{ color: colors.textMuted, fontSize: 13 }}>لا توجد أسابيع متاحة لإعداد التقارير الشاملة.</p> : <>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+            <label style={{ flex: '1 1 170px', fontSize: 13 }}>
+              من أسبوع
+              <select value={fromWeekName} onChange={(e) => setFromWeekName(e.target.value)} style={{ width: '100%', padding: 9, marginTop: 4 }}>
+                {opts.map((n) => <option key={`f-${n}`} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <label style={{ flex: '1 1 170px', fontSize: 13 }}>
+              إلى أسبوع
+              <select value={toWeekName} onChange={(e) => setToWeekName(e.target.value)} style={{ width: '100%', padding: 9, marginTop: 4 }}>
+                {opts.map((n) => <option key={`t-${n}`} value={n}>{n}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              onClick={downloadAllClasses}
+              disabled={!!generating}
+              style={{ flex: '1 1 210px', padding: '10px 14px', background: colors.ink, color: '#fff', border: 'none', borderRadius: radius.button, fontWeight: 'bold' }}
+            >
+              {generating === 'classes' ? 'جارٍ التوليد...' : 'تحليل نتائج جميع الفصول'}
+            </button>
+            <button
+              onClick={downloadImpact}
+              disabled={!!generating}
+              style={{ flex: '1 1 210px', padding: '10px 14px', background: colors.primary, color: '#fff', border: 'none', borderRadius: radius.button, fontWeight: 'bold' }}
+            >
+              {generating === 'impact' ? 'جارٍ التوليد...' : 'تقرير الأثر العام'}
+            </button>
+          </div>
+
+          <p style={{ fontSize: 11, color: colors.textMuted, marginBottom: 0, marginTop: 8 }}>
+            تحليل جميع الفصول يتضمن الرسوم البيانية، الاتجاه عبر الأسابيع، الخريطة الحرارية للمهارات، أثر المعالجة، التنبيهات والأولويات.
+          </p>
+        </>}
       </div>
     </>}
   </div>;
