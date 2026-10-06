@@ -64,6 +64,11 @@ jobs:
             cp -a .patches/app/. .deploy-app/app/
           fi
 
+          if [ -f ".patches/overrides/TeacherReportsEnhanced.jsx" ]; then
+            echo "Applying latest TeacherReports override."
+            cp .patches/overrides/TeacherReportsEnhanced.jsx .deploy-app/app/pages/TeacherReportsEnhanced.jsx
+          fi
+
           test -f .deploy-app/package.json || {
             echo "::error::package.json is missing"
             exit 1
@@ -80,13 +85,6 @@ jobs:
           fi
 
           echo "Source validation passed."
-
-          echo "===== BEGIN ClassRangeReportDocument.jsx ====="
-          cat .deploy-app/app/pages/ClassRangeReportDocument.jsx || true
-          echo "===== END ClassRangeReportDocument.jsx ====="
-          echo "===== BEGIN reportsApi-range ====="
-          awk '/export async function buildClassRangeReportData/{flag=1} flag{print} /^export async function / && flag && !/buildClassRangeReportData/{exit}' .deploy-app/app/lib/reportsApi.js || true
-          echo "===== END reportsApi-range ====="
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
