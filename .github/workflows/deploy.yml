@@ -55,6 +55,15 @@ jobs:
               ./ .deploy-app/
           fi
 
+          if [ -d ".patches/app" ]; then
+            test -d .deploy-app/app || {
+              echo "::error::Patch target app/ folder is missing from the latest ZIP"
+              exit 1
+            }
+            echo "Overlaying approved patches on the latest ZIP source."
+            cp -a .patches/app/. .deploy-app/app/
+          fi
+
           test -f .deploy-app/package.json || {
             echo "::error::package.json is missing"
             exit 1
@@ -71,18 +80,6 @@ jobs:
           fi
 
           echo "Source validation passed."
-
-          for FILE in \
-            .deploy-app/app/pages/TeacherAllClassesReportDocument.jsx \
-            .deploy-app/app/lib/impactReportsApi.js \
-            .deploy-app/app/pages/TeacherReportsEnhanced.jsx \
-            .deploy-app/app/pages/ClassReportEnhanced.jsx \
-            .deploy-app/app/App.js \
-            .deploy-app/app/App.jsx; do
-            echo "===== BEGIN $FILE ====="
-            if [ -f "$FILE" ]; then cat "$FILE"; else echo "MISSING"; fi
-            echo "===== END $FILE ====="
-          done
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
