@@ -14,11 +14,14 @@ import {
 import { listSchoolTeachers } from '../lib/teachersApi';
 import { listClassStudents } from '../lib/studentsApi';
 import { getLatestWeekSummaryLight } from '../lib/overviewApi';
+import { listWeeksForClass } from '../lib/weeksApi';
+import { buildClassWeekReportData } from '../lib/reportsApi';
 import { listActionsForClass } from '../lib/actionEngine';
 import { exportSchoolBackupAsExcelBlob, downloadBlobAsFile } from '../lib/backupApi';
 import ClassDetail from './ClassDetail';
 import ClassReport from './ClassReport';
 import PendingAckReportDocument from './PendingAckReportDocument';
+import AllClassesTrackingReportDocument from './AllClassesTrackingReportDocument';
 import { colors, font, radius, spacing } from '../lib/theme';
 
 const TABS = [
@@ -94,6 +97,9 @@ export default function AdminDashboard({ schoolId }) {
 
   const [trackingRows, setTrackingRows] = useState(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingReportScope, setTrackingReportScope] = useState('all');
+  const [trackingReportGenerating, setTrackingReportGenerating] = useState(false);
+  const [trackingReportSuccess, setTrackingReportSuccess] = useState('');
   const [reportTarget, setReportTarget] = useState(null);
 
   const [pendingAckScope, setPendingAckScope] = useState('all');
@@ -202,6 +208,73 @@ export default function AdminDashboard({ schoolId }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, loading]);
+
+  async function handleDownloadTrackingReport() {
+    if (!trackingRows || trackingReportGenerating) return;
+
+    setError('');
+    setTrackingReportSuccess('');
+    setTrackingReportGenerating(true);
+
+    try {
+      const eligibleRows = trackingRows.filter((row) => row.weekName);
+      const targetRows = trackingReportScope === 'all'
+        ? eligibleRows
+        : eligibleRows.filter((row) => row.assignmentId === trackingReportScope);
+
+      if (targetRows.length === 0) {
+        throw new Error('لا توجد بيانات رصد متاحة للنطاق المحدد.');
+      }
+
+      const reports = [];
+      for (const row of targetRows) {
+        // eslint-disable-next-line no-await-in-loop
+        const weeks = await listWeeksForClass(schoolId, row.classId, row.teacherUid);
+        const latestWeek = weeks[0];
+        if (!latestWeek) continue;
+
+        // eslint-disable-next-line no-await-in-loop
+        const reportData = await buildClassWeekReportData(schoolId, {
+          classId: row.classId,
+          teacherUid: row.teacherUid,
+          className: row.className,
+          subject: row.subject,
+          teacherName: row.teacherName,
+          weekId: latestWeek.id,
+          weekName: latestWeek.name,
+          weekTypeLabel: latestWeek.type === 'remediation' ? 'معالجة' : 'قياس',
+          enrichmentLink: latestWeek.enrichmentLink || '',
+        });
+
+        reports.push(reportData);
+      }
+
+      if (reports.length === 0) {
+        throw new Error('تعذّر العثور على رصد صالح لإنشاء التقرير.');
+      }
+
+      const blob = await pdf(
+        <AllClassesTrackingReportDocument reports={reports} />,
+      ).toBlob();
+
+      const filename = trackingReportScope === 'all'
+        ? `تقرير-رصد-جميع-الفصول-${school?.name || 'المدرسة'}.pdf`
+        : `تقرير-رصد-${reports[0].className}.pdf`;
+
+      await downloadBlob(blob, filename);
+
+      const skipped = targetRows.length - reports.length;
+      setTrackingReportSuccess(
+        trackingReportScope === 'all'
+          ? `تم إعداد تقرير رصد موحّد لـ ${reports.length} فصل/إسناد في ملف PDF واحد${skipped > 0 ? `، وتعذّر إدراج ${skipped} لعدم وجود رصد صالح` : ''}.`
+          : 'تم إعداد تقرير الرصد وتحميله بنجاح.',
+      );
+    } catch (err) {
+      setError(err.message || 'تعذّر إنشاء تقرير الرصد.');
+    } finally {
+      setTrackingReportGenerating(false);
+    }
+  }
 
   async function handleCreateClass(e) {
     e.preventDefault();
@@ -623,6 +696,54 @@ export default function AdminDashboard({ schoolId }) {
                 {highActionsCount > 0 && `${highActionsCount} فصلًا فيه إجراءات نشطة تحتاج متابعة`}
                 {staleCount === 0 && highActionsCount === 0 && 'جميع الفصول مرصودة بانتظام، ولا توجد إجراءات نشطة تستدعي الانتباه حاليًا'}
               </p>
+
+              <div style={{ border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: spacing.lg, marginBottom: spacing.xl, background: colors.cardBg }}>
+                <h3 style={{ marginTop: 0, marginBottom: 4, fontFamily: font.family, color: colors.ink }}>تقارير رصد الفصول</h3>
+                <p style={{ marginTop: 0, marginBottom: spacing.md, fontSize: 12, color: colors.textMuted }}>
+                  اختاري فصلًا محددًا أو «الكل» لتنزيل تقارير آخر رصد متاح. عند اختيار «الكل» يُنشئ منجزي ملف PDF واحدًا يضم تقارير جميع الفصول المرصودة.
+                </p>
+
+                <div style={{ display: 'flex', gap: spacing.sm, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ flex: '1 1 280px' }}>
+                    <label style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>الفصل</label>
+                    <select
+                      value={trackingReportScope}
+                      onChange={(e) => { setTrackingReportScope(e.target.value); setTrackingReportSuccess(''); }}
+                      style={{ width: '100%', padding: spacing.sm }}
+                    >
+                      <option value="all">الكل — جميع الفصول المرصودة</option>
+                      {trackingRows.filter((row) => row.weekName).map((row) => (
+                        <option key={row.assignmentId} value={row.assignmentId}>
+                          {row.className} — {row.teacherName} ({row.subject})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadTrackingReport}
+                    disabled={trackingReportGenerating || trackingRows.every((row) => !row.weekName)}
+                    style={{
+                      padding: '10px 16px',
+                      background: colors.primary,
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: radius.button,
+                      opacity: trackingReportGenerating ? 0.65 : 1,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {trackingReportGenerating ? '...جارٍ إعداد التقرير' : trackingReportScope === 'all' ? 'تحميل تقرير الكل PDF' : 'تحميل تقرير الفصل PDF'}
+                  </button>
+                </div>
+
+                {trackingReportSuccess && (
+                  <div style={{ marginTop: spacing.sm, background: colors.primaryTint, color: '#0b5c33', padding: 8, borderRadius: radius.button, fontSize: 12 }}>
+                    {trackingReportSuccess}
+                  </div>
+                )}
+              </div>
 
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
