@@ -1,0 +1,261 @@
+import { Document, Page, Text, View, StyleSheet, Font, Link } from '@react-pdf/renderer';
+
+Font.register({
+  family: 'Plex',
+  src: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/ibmplexsansarabic/IBMPlexSansArabic-Regular.ttf',
+});
+Font.register({
+  family: 'Plex-Bold',
+  src: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/ibmplexsansarabic/IBMPlexSansArabic-Bold.ttf',
+});
+
+const STATUS_STYLE = {
+  mastered: { bg: '#eaf6ee', text: '#0b5c33', border: '#0b7a4b' },
+  needsSupport: { bg: '#fff7e0', text: '#8a6d00', border: '#d9b400' },
+  notMastered: { bg: '#fdecea', text: '#a10000', border: '#c62828' },
+  absent: { bg: '#f2f2f2', text: '#666', border: '#ccc' },
+};
+
+const STATUS_KEYS = [
+  { key: 'mastered', label: 'متقنة' },
+  { key: 'needsSupport', label: 'تحتاج دعمًا' },
+  { key: 'notMastered', label: 'غير متقنة' },
+  { key: 'absent', label: 'غائبة' },
+];
+
+const TYPE_LABELS_AR = { measurement: 'قياس', remediation: 'معالجة' };
+const HEADER_BG = '#14261e';
+const HEADER_DIVIDER = '#3a4a42';
+const ROW_BORDER = '#e0e0e0';
+const COL_BORDER = '#cfcfcf';
+
+const styles = StyleSheet.create({
+  page: { fontFamily: 'Plex', paddingTop: 178, paddingBottom: 42, paddingHorizontal: 24, fontSize: 9 },
+
+  fixedHeaderBlock: { position: 'absolute', top: 14, left: 24, right: 24 },
+  bulkTitle: { fontFamily: 'Plex-Bold', fontSize: 8, color: '#666', textAlign: 'center', marginBottom: 3 },
+  schoolName: { fontFamily: 'Plex-Bold', fontSize: 15, color: '#14261e', textAlign: 'center', lineHeight: 1.3 },
+  headerLine: { fontSize: 9, color: '#555', textAlign: 'center', marginTop: 3, lineHeight: 1.3 },
+  reportTitle: { fontFamily: 'Plex-Bold', fontSize: 14, color: '#0b7a4b', textAlign: 'center', marginTop: 8, marginBottom: 3 },
+  metaLine: { fontSize: 8, color: '#666', textAlign: 'center', marginBottom: 2 },
+  linkText: { color: '#0b7a4b', textDecoration: 'underline' },
+  statsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 8, fontSize: 8 },
+
+  columnHeaderRow: {
+    flexDirection: 'row-reverse',
+    backgroundColor: HEADER_BG,
+    borderWidth: 1,
+    borderColor: HEADER_BG,
+    paddingVertical: 5,
+  },
+  headerCellWrap: {
+    borderLeftWidth: 0.75,
+    borderLeftColor: HEADER_DIVIDER,
+    paddingHorizontal: 3,
+  },
+  headerCell: {
+    fontFamily: 'Plex-Bold',
+    fontSize: 9,
+    textAlign: 'center',
+    color: '#ffffff',
+  },
+  headerCellFirst: { textAlign: 'right', paddingRight: 6 },
+  headerCellSource: {
+    fontFamily: 'Plex',
+    fontSize: 6.5,
+    textAlign: 'center',
+    color: '#b9c4bf',
+    marginTop: 1,
+  },
+
+  row: {
+    flexDirection: 'row-reverse',
+    minHeight: 20,
+    alignItems: 'center',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderBottomWidth: 0.75,
+    borderColor: ROW_BORDER,
+  },
+  rowEven: { backgroundColor: '#fafafa' },
+  cell: {
+    fontSize: 9,
+    textAlign: 'right',
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+    borderLeftWidth: 0.75,
+    borderLeftColor: COL_BORDER,
+  },
+
+  badge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 4,
+    borderWidth: 1,
+    alignSelf: 'center',
+    minWidth: 44,
+    alignItems: 'center',
+  },
+  badgeText: { fontSize: 9, fontFamily: 'Plex-Bold' },
+
+  footer: {
+    position: 'absolute',
+    bottom: 14,
+    left: 24,
+    right: 24,
+    flexDirection: 'row-reverse',
+    fontSize: 8,
+    color: '#333',
+    borderTop: 0.5,
+    borderTopColor: '#ccc',
+    paddingTop: 6,
+  },
+  footerColRight: { flex: 1, textAlign: 'right' },
+  footerColCenter: { flex: 1, textAlign: 'center' },
+  footerColLeft: { flex: 1, textAlign: 'left' },
+
+  noData: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    padding: 16,
+    color: '#777',
+    textAlign: 'center',
+  },
+});
+
+function StatusBadge({ status, statusLabel }) {
+  const s = STATUS_STYLE[status] || { bg: '#f2f2f2', text: '#666', border: '#ccc' };
+  return (
+    <View style={[styles.badge, { backgroundColor: s.bg, borderColor: s.border }]}>
+      <Text style={[styles.badgeText, { color: s.text }]}>{statusLabel}</Text>
+    </View>
+  );
+}
+
+function columnWidths(skillCount) {
+  const nameW = 16;
+  const recW = 22;
+  const actionW = 20;
+  const remaining = 100 - nameW - recW - actionW;
+  const skillW = remaining / Math.max(skillCount, 1);
+  return { nameW, recW, actionW, skillW };
+}
+
+function ClassTrackingPage({ data, reportIndex, totalReports }) {
+  const { nameW, recW, actionW, skillW } = columnWidths(data.skillTitles.length);
+  const skillSources = data.skillSources || [];
+  const reportTypeLabel = data.weekTypeLabel === 'قياس'
+    ? `تقرير قياس المهارات للصف ${data.className}`
+    : `تقرير معالجة المهارات للصف ${data.className}`;
+
+  return (
+    <Page size="A4" orientation="landscape" style={styles.page}>
+      <View style={styles.fixedHeaderBlock} fixed>
+        <Text style={styles.bulkTitle}>تقرير رصد جميع الفصول — {reportIndex} من {totalReports}</Text>
+        <Text style={styles.schoolName}>{data.schoolName}</Text>
+        <Text style={styles.headerLine}>المادة: {data.subject || 'غير محددة'} — المعلّمة: {data.teacherName || '—'}</Text>
+        <Text style={styles.headerLine}>{data.weekName}</Text>
+
+        <Text style={styles.reportTitle}>{reportTypeLabel}</Text>
+
+        {data.enrichmentLink && (
+          <Text style={styles.metaLine}>
+            الرابط الإثرائي: <Link src={data.enrichmentLink} style={styles.linkText}>{data.enrichmentLink}</Link>
+          </Text>
+        )}
+
+        <View style={styles.statsRow}>
+          {STATUS_KEYS.map((s) => (
+            <Text key={s.key}>{s.label}: {data.classCounts[s.key]}</Text>
+          ))}
+        </View>
+
+        <View style={styles.columnHeaderRow}>
+          <View style={[styles.headerCellWrap, { width: `${nameW}%` }]}>
+            <Text style={[styles.headerCell, styles.headerCellFirst]}>الطالبة</Text>
+          </View>
+
+          {data.skillTitles.map((title, index) => {
+            const source = skillSources[index];
+            return (
+              <View key={index} style={[styles.headerCellWrap, { width: `${skillW}%` }]}>
+                <Text style={styles.headerCell}>{title}</Text>
+                {source && (
+                  <Text style={styles.headerCellSource}>
+                    ({source.name} — {TYPE_LABELS_AR[source.type] || source.type})
+                  </Text>
+                )}
+              </View>
+            );
+          })}
+
+          <View style={[styles.headerCellWrap, { width: `${recW}%` }]}>
+            <Text style={styles.headerCell}>التوصية</Text>
+          </View>
+          <View style={[styles.headerCellWrap, { width: `${actionW}%` }]}>
+            <Text style={styles.headerCell}>الإجراء</Text>
+          </View>
+        </View>
+      </View>
+
+      {data.rows.length === 0 ? (
+        <View style={styles.noData}>
+          <Text>لا توجد طالبات مسجلات في هذا الفصل.</Text>
+        </View>
+      ) : (
+        data.rows.map((row, index) => (
+          <View key={index} style={[styles.row, index % 2 === 1 && styles.rowEven]} wrap={false}>
+            <Text style={[styles.cell, { width: `${nameW}%` }]}>{row.name}</Text>
+
+            {row.cells.map((cell, cellIndex) => (
+              <View key={cellIndex} style={[styles.cell, { width: `${skillW}%`, paddingVertical: 4 }]}>
+                <StatusBadge status={cell.status} statusLabel={cell.statusLabel} />
+              </View>
+            ))}
+
+            <Text style={[styles.cell, { width: `${recW}%`, fontSize: 8 }]}>{row.recommendation}</Text>
+
+            <View style={[styles.cell, { width: `${actionW}%` }]}>
+              {(row.activeActions || []).map((action, actionIndex) => (
+                <Text
+                  key={actionIndex}
+                  style={{
+                    fontSize: 7,
+                    color: action.type === 'remedial' ? '#8a5a00' : '#0b5c33',
+                  }}
+                >
+                  {action.type === 'remedial' ? '⚠' : '⭐'} {action.affectedSkillTitles.join('، ')}: {action.text}
+                </Text>
+              ))}
+            </View>
+          </View>
+        ))
+      )}
+
+      <View style={styles.footer} fixed>
+        <Text style={styles.footerColRight}>مديرة المدرسة: {data.principalName || '—'}</Text>
+        <Text style={styles.footerColCenter}>المعلّمة: {data.teacherName || '—'}</Text>
+        <Text
+          style={styles.footerColLeft}
+          render={({ pageNumber, totalPages }) => `صادر من منجزي — صفحة ${pageNumber} من ${totalPages}`}
+        />
+      </View>
+    </Page>
+  );
+}
+
+export default function AllClassesTrackingReportDocument({ reports }) {
+  return (
+    <Document>
+      {reports.map((data, index) => (
+        <ClassTrackingPage
+          key={`${data.className}-${data.teacherName}-${data.weekName}-${index}`}
+          data={data}
+          reportIndex={index + 1}
+          totalReports={reports.length}
+        />
+      ))}
+    </Document>
+  );
+}
