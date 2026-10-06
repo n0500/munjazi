@@ -81,6 +81,13 @@ jobs:
 
           echo "Source validation passed."
 
+          echo "===== BEGIN ClassRangeReportDocument.jsx ====="
+          cat .deploy-app/app/pages/ClassRangeReportDocument.jsx || true
+          echo "===== END ClassRangeReportDocument.jsx ====="
+          echo "===== BEGIN reportsApi-range ====="
+          awk '/export async function buildClassRangeReportData/{flag=1} flag{print} /^export async function / && flag && !/buildClassRangeReportData/{exit}' .deploy-app/app/lib/reportsApi.js || true
+          echo "===== END reportsApi-range ====="
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
