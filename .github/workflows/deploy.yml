@@ -72,18 +72,17 @@ jobs:
 
           echo "Source validation passed."
 
-          echo "===== BEGIN TeacherReportsEnhanced.jsx ====="
-          cat .deploy-app/app/pages/TeacherReportsEnhanced.jsx
-          echo "===== END TeacherReportsEnhanced.jsx ====="
-          echo "===== BEGIN ClassReportEnhanced.jsx ====="
-          cat .deploy-app/app/pages/ClassReportEnhanced.jsx
-          echo "===== END ClassReportEnhanced.jsx ====="
-          echo "===== BEGIN TeacherDashboard.jsx ====="
-          cat .deploy-app/app/pages/TeacherDashboard.jsx
-          echo "===== END TeacherDashboard.jsx ====="
-          echo "===== BEGIN TeacherAllClassesReportDocument.jsx ====="
-          cat .deploy-app/app/pages/TeacherAllClassesReportDocument.jsx
-          echo "===== END TeacherAllClassesReportDocument.jsx ====="
+          for FILE in \
+            .deploy-app/app/pages/TeacherAllClassesReportDocument.jsx \
+            .deploy-app/app/lib/impactReportsApi.js \
+            .deploy-app/app/pages/TeacherReportsEnhanced.jsx \
+            .deploy-app/app/pages/ClassReportEnhanced.jsx \
+            .deploy-app/app/App.js \
+            .deploy-app/app/App.jsx; do
+            echo "===== BEGIN $FILE ====="
+            if [ -f "$FILE" ]; then cat "$FILE"; else echo "MISSING"; fi
+            echo "===== END $FILE ====="
+          done
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
