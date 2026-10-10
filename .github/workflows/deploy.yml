@@ -91,6 +91,9 @@ jobs:
         with:
           node-version: 20
 
+      - name: Verify week copy behavior
+        run: node --experimental-vm-modules --test tests/week-copy.test.mjs
+
       - name: Install dependencies
         working-directory: .deploy-app
         run: npm install
