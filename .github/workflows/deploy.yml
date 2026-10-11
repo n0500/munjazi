@@ -98,6 +98,9 @@ jobs:
         working-directory: .deploy-app
         run: npm install
 
+      - name: Verify all-classes PDF export
+        run: node --test tests/all-classes-pdf.test.mjs
+
       - name: Build
         working-directory: .deploy-app
         run: npm run build

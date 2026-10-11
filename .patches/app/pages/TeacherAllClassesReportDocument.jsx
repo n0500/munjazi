@@ -122,7 +122,11 @@ function Donut({ counts }) {
           const val = Number(counts?.[item.key] || 0);
           if (!val) return null;
           const dash = val / total * circumference;
-          const node = <Circle key={item.key} cx="52.5" cy="52.5" r={radius} fill="none" stroke={item.color} strokeWidth="17" strokeDasharray={`${dash} ${circumference-dash}`} strokeDashoffset={-offset} transform="rotate(-90 52.5 52.5)" />;
+          // A single status fills the circle; PDFKit rejects a zero dash gap.
+          const strokeDasharray = val === total ? undefined : `${dash} ${circumference-dash}`;
+          // The PDF renderer ignores SVG dash offsets, so rotate each segment.
+          const rotation = -90 + offset / circumference * 360;
+          const node = <Circle key={item.key} cx="52.5" cy="52.5" r={radius} fill="none" stroke={item.color} strokeWidth="17" strokeDasharray={strokeDasharray} transform={`rotate(${rotation} 52.5 52.5)`} />;
           offset += dash;
           return node;
         })}
