@@ -5,17 +5,19 @@ import {
   suggestCandidates,
   createPlan,
   listPlansForTeacher,
-  closePlan,
+  getPlanImpact,
+  closePlanWithEvidence,
   addFollowUp,
   listFollowUps,
   suggestFollowUpText,
   FOLLOW_UP_PRESETS,
 } from '../lib/remediationApi';
 import { getSchool } from '../lib/schoolsApi';
+import { STATUS_LABELS } from '../lib/recommendationsApi';
 import { colors, font, radius, spacing } from '../lib/theme';
 import RemediationPlanDocument from './RemediationPlanDocument';
 
-const STATUS_TEXT = { active: 'نشطة', closedSuccess: 'أُغلقت — نجحت', closedFailure: 'أُغلقت — لم تنجح' };
+const STATUS_TEXT = { active: 'نشطة', closedSuccess: 'أُغلقت — تحقق الإتقان', closedPartial: 'أُغلقت — تحسن جزئي', closedFailure: 'أُغلقت — لم يتحقق تحسن' };
 
 function formatDate(value) {
   if (!value) return '—';
@@ -50,6 +52,9 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
   const [followUpDraft, setFollowUpDraft] = useState('');
   const [creatingPlanKey, setCreatingPlanKey] = useState(null);
   const [exportingPlanId, setExportingPlanId] = useState(null);
+  const [impactByPlan, setImpactByPlan] = useState({});
+  const [impactLoadingId, setImpactLoadingId] = useState(null);
+  const [closingPlanId, setClosingPlanId] = useState(null);
 
   const classNameFor = (classId) => classes.find((c) => c.id === classId)?.name || '؟';
   const subjectFor = (classId) => assignments.find((a) => a.classId === classId)?.subject || '';
@@ -116,6 +121,15 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
     }
     setExpandedPlanId(plan.id);
     setFollowUpDraft('');
+    setImpactLoadingId(plan.id);
+    try {
+      const impact = await getPlanImpact(schoolId, plan, teacherUid);
+      setImpactByPlan((prev) => ({ ...prev, [plan.id]: impact }));
+    } catch (err) {
+      setError(err.message || 'تعذر قراءة القياس اللاحق.');
+    } finally {
+      setImpactLoadingId(null);
+    }
     if (!followUpsByPlan[plan.id]) {
       const rows = await listFollowUps(schoolId, plan.id);
       setFollowUpsByPlan((prev) => ({ ...prev, [plan.id]: rows }));
@@ -142,13 +156,17 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
     }
   }
 
-  async function handleClose(plan, outcome) {
+  async function handleClose(plan) {
     setError('');
+    setClosingPlanId(plan.id);
     try {
-      await closePlan(schoolId, plan.id, outcome);
+      await closePlanWithEvidence(schoolId, plan, teacherUid);
       await refresh();
+      setExpandedPlanId(null);
     } catch (err) {
-      setError(err.message || 'تعذّر إغلاق الخطة.');
+      setError(err.message || 'تعذّر اعتماد القياس وإغلاق الخطة.');
+    } finally {
+      setClosingPlanId(null);
     }
   }
 
@@ -245,6 +263,13 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
 
             {expandedPlanId === plan.id && (
               <div style={{ marginTop: spacing.md, borderTop: `1px solid ${colors.border}`, paddingTop: spacing.sm }}>
+                <div style={{ padding: 12, background: colors.primaryTint, borderRadius: radius.button, marginBottom: spacing.md, fontSize: 13 }}>
+                  <strong>قياس أثر المعالجة</strong>
+                  {impactLoadingId === plan.id ? <p>جارٍ التحقق من أحدث قياس لاحق...</p> : impactByPlan[plan.id] ? (
+                    <p>قبل: {STATUS_LABELS[impactByPlan[plan.id].baseline]} ← بعد: {STATUS_LABELS[impactByPlan[plan.id].after]} · {impactByPlan[plan.id].measurementWeekName} · {impactByPlan[plan.id].change === 'improved' ? 'تحسّن' : impactByPlan[plan.id].change === 'declined' ? 'تراجع' : 'دون تغيير'}</p>
+                  ) : <p>لا يوجد قياس جديد موثق بعد بدء هذه الخطة. سجّلي المهارة نفسها في أسبوع من نوع «قياس»، ثم اعتمدي التقييم قبل إغلاق الخطة.</p>}
+                  <small>المقارنة بين مستويات الإتقان، وليست نسبة مئوية أو نتيجة اختبار.</small>
+                </div>
                 <textarea
                   value={followUpDraft}
                   onChange={(e) => setFollowUpDraft(e.target.value)}
@@ -274,11 +299,8 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
                 ))}
 
                 <div style={{ display: 'flex', gap: 8, marginTop: spacing.sm, flexWrap: 'wrap' }}>
-                  <button onClick={() => handleClose(plan, 'success')} style={{ padding: '6px 12px', background: colors.primaryTint, color: '#0b5c33', border: `1px solid ${colors.primary}`, borderRadius: radius.button, fontSize: 12 }}>
-                    أُغلقت — نجحت
-                  </button>
-                  <button onClick={() => handleClose(plan, 'failure')} style={{ padding: '6px 12px', background: colors.redTint, color: colors.red, border: `1px solid ${colors.redBorder}`, borderRadius: radius.button, fontSize: 12 }}>
-                    أُغلقت — لم تنجح
+                  <button onClick={() => handleClose(plan)} disabled={!impactByPlan[plan.id] || closingPlanId === plan.id} style={{ padding: '6px 12px', background: impactByPlan[plan.id] ? colors.primaryTint : '#f2f2f2', color: '#0b5c33', border: `1px solid ${colors.primary}`, borderRadius: radius.button, fontSize: 12 }}>
+                    {closingPlanId === plan.id ? 'جارٍ اعتماد القياس...' : 'اعتماد نتيجة القياس وإغلاق الخطة'}
                   </button>
                   <button
                     onClick={() => handleExportPdf(plan)}
@@ -299,7 +321,8 @@ export default function RemediationPlans({ schoolId, teacherUid, teacherName, on
           <h3 style={{ fontFamily: font.family }}>الخطط المغلقة ({closedPlans.length})</h3>
           {closedPlans.map((plan) => (
             <div key={plan.id} style={{ border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: 10, marginBottom: 8, fontSize: 13 }}>
-              <strong>{plan.studentName}</strong> — {plan.skillTitle} — {STATUS_TEXT[plan.status]}
+              <strong>{plan.studentName}</strong> — {plan.skillTitle} — {STATUS_TEXT[plan.status] || plan.status}
+              {plan.impactEvidence ? <div style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>من {STATUS_LABELS[plan.impactEvidence.baseline]} إلى {STATUS_LABELS[plan.impactEvidence.after]} · {plan.impactEvidence.measurementWeekName}</div> : <div style={{ color: colors.textMuted, fontSize: 12 }}>خطة مغلقة سابقًا دون ارتباط آلي بنتيجة قياس.</div>}
             </div>
           ))}
         </>
