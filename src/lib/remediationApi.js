@@ -124,6 +124,55 @@ export async function closePlan(schoolId, planId, outcome) {
   });
 }
 
+// Evidence-based follow-up: a NEW assessment recorded in a later
+// measurement week for the same learner and skill demonstrates impact.
+// Copied historical assessments and absences do not count as improvement.
+export async function getPlanImpact(schoolId, plan, teacherUid) {
+  const baseline = plan?.initialStatus;
+  const order = { notMastered: 0, needsSupport: 1, mastered: 2 };
+  const baselineTime = plan?.startDate?.seconds || plan?.createdAt?.seconds || 0;
+  if (!Object.prototype.hasOwnProperty.call(order, baseline) || !baselineTime) return null;
+  const weeks = await listWeeksForClass(schoolId, plan.classId, teacherUid);
+  const normalized = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  for (const week of weeks) {
+    if (week.type !== 'measurement' || (week.createdAt?.seconds || 0) <= baselineTime) continue;
+    // eslint-disable-next-line no-await-in-loop
+    const skills = await listSkillsForWeek(schoolId, week.id);
+    const skill = skills.find((s) => !s.sourceWeekName && normalized(s.title) === normalized(plan.skillTitle));
+    if (!skill) continue;
+    // eslint-disable-next-line no-await-in-loop
+    const assessments = await listAssessmentsForSkill(schoolId, skill.id);
+    const record = assessments[plan.studentId];
+    const after = record?.status;
+    if (!Object.prototype.hasOwnProperty.call(order, after)) continue;
+    if ((record?.updatedAt?.seconds || 0) <= baselineTime) continue;
+    const delta = order[after] - order[baseline];
+    return {
+      baseline, after, change: delta > 0 ? 'improved' : delta < 0 ? 'declined' : 'unchanged',
+      measurementWeekId: week.id, measurementWeekName: week.name || '',
+      measuredAt: record.updatedAt.toDate ? record.updatedAt.toDate().toISOString() : new Date(record.updatedAt.seconds * 1000).toISOString(),
+    };
+  }
+  return null;
+}
+
+// Outcome comes from a saved post-intervention assessment, not a manual success
+// label. Existing plans, follow-ups and student assessment data are preserved.
+export async function closePlanWithEvidence(schoolId, plan, teacherUid) {
+  const impact = await getPlanImpact(schoolId, plan, teacherUid);
+  if (!impact) {
+    throw new Error('لا يوجد قياس جديد موثق بعد بدء الخطة للمهارة نفسها. سجّلي نتيجة القياس في أسبوع قياس لاحق ثم أعيدي المحاولة.');
+  }
+  const status = impact.after === 'mastered' ? 'closedSuccess'
+    : impact.change === 'improved' ? 'closedPartial' : 'closedFailure';
+  await updateDoc(doc(db, 'schools', schoolId, 'remediationPlans', plan.id), {
+    status,
+    impactEvidence: impact,
+    closedAt: serverTimestamp(),
+  });
+  return impact;
+}
+
 export async function addFollowUp(schoolId, { planId, studentId, text }) {
   const ref = await addDoc(collection(db, 'schools', schoolId, 'remediationFollowUps'), {
     planId,
