@@ -9,7 +9,8 @@ Font.register({
   src: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/ibmplexsansarabic/IBMPlexSansArabic-Bold.ttf',
 });
 
-const STATUS_TEXT = { active: 'نشطة', closedSuccess: 'أُغلقت — نجحت', closedFailure: 'أُغلقت — لم تنجح' };
+const STATUS_TEXT = { active: 'نشطة', closedSuccess: 'أُغلقت — تحقق الإتقان', closedPartial: 'أُغلقت — تحسن جزئي', closedFailure: 'أُغلقت — لم يتحقق تحسن' };
+const SKILL_STATUS = { mastered: 'متقنة', needsSupport: 'تحتاج متابعة', notMastered: 'غير متقنة' };
 
 const styles = StyleSheet.create({
   page: { fontFamily: 'Plex', paddingTop: 100, paddingBottom: 40, paddingHorizontal: 30, fontSize: 10 },
@@ -47,6 +48,7 @@ const styles = StyleSheet.create({
 const STATUS_STYLE = {
   active: { bg: '#eaf6ee', text: '#0b5c33', border: '#0b7a4b' },
   closedSuccess: { bg: '#eaf6ee', text: '#0b5c33', border: '#0b7a4b' },
+  closedPartial: { bg: '#fff3dd', text: '#805100', border: '#d4a531' },
   closedFailure: { bg: '#fdecea', text: '#a10000', border: '#c62828' },
 };
 
@@ -93,6 +95,16 @@ export default function RemediationPlanDocument({ plan, followUps, schoolName, p
         <Text style={styles.infoLine}>
           تاريخ البداية: {formatDate(startDateValue)} — تاريخ المراجعة المتوقّع: {formatDate(plan.reviewDate)}
         </Text>
+
+        <Text style={styles.sectionTitle}>أثر المعالجة ونتيجة القياس</Text>
+        {plan.impactEvidence ? (
+          <View>
+            <Text style={styles.infoLine}>قبل المعالجة: {SKILL_STATUS[plan.impactEvidence.baseline] || '—'}</Text>
+            <Text style={styles.infoLine}>بعد المعالجة: {SKILL_STATUS[plan.impactEvidence.after] || '—'}</Text>
+            <Text style={styles.infoLine}>أسبوع القياس: {plan.impactEvidence.measurementWeekName || '—'}</Text>
+            <Text style={styles.infoLine}>المؤشر نوعي بمستويات الإتقان وليس نسبة مئوية.</Text>
+          </View>
+        ) : <Text style={styles.noFollowUps}>لم يُربط بهذه الخطة قياس لاحق موثق.</Text>}
 
         <Text style={styles.sectionTitle}>سجل المتابعة</Text>
         {followUps.length === 0 ? (
