@@ -12,7 +12,7 @@ const buttonStyle = { border: '1px solid #b9cec3', borderRadius: 7, padding: '6p
 async function loadTeacherHistory(schoolId, assignments) {
   const histories = await Promise.all(assignments.map(async (a) => {
     const [weeks, students] = await Promise.all([
-      listWeeksForClass(schoolId, a.classId, a.teacherUid),
+      listWeeksForClass(schoolId, a.classId, a.teacherUid, a.id),
       listClassStudents(schoolId, a.classId),
     ]);
     const entries = await Promise.all(weeks.map(async (week) => {
@@ -37,6 +37,7 @@ function buildRows(entries) {
     const sourceTitles = new Set(measurement.skills.map((s) => normalize(s.title)));
     const linked = remediations.filter((r) => {
       if (r.assignment.classId !== measurement.assignment.classId || r.assignment.teacherUid !== measurement.assignment.teacherUid) return false;
+      if (r.week.sourceMeasurementWeekId) return r.week.sourceMeasurementWeekId === measurement.week.id;
       if (stamp(r.week) < stamp(measurement.week)) return false;
       return r.skills.some((skill) => normalize(skill.sourceWeekName) === normalize(measurement.week.name) &&
         (skill.sourceWeekType === 'measurement' || !skill.sourceWeekType) && sourceTitles.has(normalize(skill.title)));
@@ -50,6 +51,7 @@ function buildRows(entries) {
 
 export default function TeacherCumulativeTracking({ schoolId, assignments, teachers, onReport }) {
   const [teacherUid, setTeacherUid] = useState('');
+  const [classFilter, setClassFilter] = useState('all');
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -62,43 +64,64 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
     catch (err) { setError(err.message || 'تعذّر تحميل سجل القياسات.'); }
     finally { setLoading(false); }
   }
-  const rows = buildRows(entries);
+  const rows = buildRows(entries).filter(row => classFilter === 'all' || (row.measurement || row.linked[0])?.assignment.classId === classFilter);
   const open = (e) => onReport({
     classId: e.assignment.classId, teacherUid: e.assignment.teacherUid, assignmentId: e.assignment.id,
     className: e.assignment.className || '', teacherName: e.assignment.teacherName || '',
     subject: e.assignment.subject || '', weekId: e.week.id, weekName: e.week.name,
   });
+  const noteTarget = (e) => onReport({
+    classId: e.assignment.classId, teacherUid: e.assignment.teacherUid, assignmentId: e.assignment.id,
+    className: e.assignment.className || '', teacherName: e.assignment.teacherName || '',
+    subject: e.assignment.subject || '', weekId: e.week.id, weekName: e.week.name,
+  });
+  const weekControl = (e) => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+    <button type="button" style={{ ...buttonStyle, border: 'none', textDecoration: 'underline', fontWeight: 700 }} onClick={() => open(e)} aria-label={'فتح تقرير ' + e.week.name}>{e.week.name}</button>
+    <button type="button" title="ملاحظة المديرة على هذا التقرير" aria-label={'ملاحظة على ' + e.week.name} onClick={() => noteTarget(e)} style={{ ...buttonStyle, padding: '5px 8px' }}>✎</button>
+  </span>;
   return <section dir="rtl" style={{ border: '1px solid #dce5de', borderRadius: 12, padding: 16, marginBottom: 20 }}>
-    <h3 style={{ marginTop: 0 }}>السجل التراكمي للقياس والمعالجة</h3>
-    <p style={{ fontSize: 13, color: colors.textMuted }}>يعرض القياسات المسجلة فعليًا فقط، وكل قياس في صف مستقل. لا تُربط المعالجة بالقياس إلا عند توثيق مصدر المهارة.</p>
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 14 }}>
-      <label htmlFor="cumulative-teacher">المعلمة</label>
-      <select id="cumulative-teacher" value={teacherUid} onChange={(e) => setTeacherUid(e.target.value)} style={{ padding: 9, minWidth: 200 }}>
-        <option value="">اختاري المعلمة</option>
-        {teachers.map((t) => <option key={t.uid} value={t.uid}>{t.displayName}</option>)}
-      </select>
-      <button type="button" onClick={load} disabled={!teacherUid || loading} style={buttonStyle}>{loading ? 'جارٍ التحميل...' : 'عرض السجل / تحديث'}</button>
+    <h3 style={{ marginTop: 0 }}>تجربة متابعة المعلمة — القياس والمعالجة</h3>
+    <p style={{ fontSize: 13, color: colors.textMuted }}>نموذج مستقل للاختبار. اضغطي اسم الأسبوع لفتح التقرير الكامل، أو رمز القلم لكتابة ملاحظة على التقرير.</p>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'end', marginBottom: 14 }}>
+      <label>المعلمة <select value={teacherUid} onChange={(e) => {setTeacherUid(e.target.value);setClassFilter('all');}} style={{ display: 'block', padding: 9, minWidth: 160 }}>
+        <option value="">اختاري المعلمة</option>{teachers.map(t => <option key={t.uid} value={t.uid}>{t.displayName}</option>)}
+      </select></label>
+      <label>الفصل <select value={classFilter} onChange={e => setClassFilter(e.target.value)} style={{ display: 'block', padding: 9, minWidth: 130 }}>
+        <option value="all">جميع الفصول</option>{teacherAssignments.map(a => <option key={a.id} value={a.classId}>{a.className || a.classId}</option>)}
+      </select></label>
+      <button type="button" onClick={load} disabled={!teacherUid || loading} style={buttonStyle}>{loading ? 'جارٍ التحميل...' : 'عرض / تحديث'}</button>
     </div>
     {error && <p role="alert" style={{ color: '#a22' }}>{error}</p>}
-    {!loading && teacherUid && !entries.length && <p style={{ color: colors.textMuted }}>لا توجد قياسات محمّلة لهذه المعلمة. اضغطي «عرض السجل / تحديث» للتحقق.</p>}
-    {!!rows.length && <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 850, textAlign: 'right', fontSize: 13 }}>
-      <thead><tr>{['الفصل / المادة','أسبوع القياس','اكتمال الرصد','الإتقان','تقرير القياس','أسبوع المعالجة','نتائج المعالجة','تقرير المعالجة'].map((h) => <th key={h} style={{ padding: 10, borderBottom: '2px solid #c8d7ce', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
-      <tbody>{rows.map((row, i) => {
+    {!loading && teacherUid && !entries.length && <p style={{ color: colors.textMuted }}>لا توجد تقارير محمّلة لهذه المعلمة.</p>}
+    <div style={{ display: 'grid', gap: 12 }}>
+      {rows.map((row, i) => {
         const m = row.measurement;
-        const treatments = row.linked;
-        const ref = m || treatments[0];
-        return <tr key={(m?.week.id || 'orphan') + '-' + i} style={{ background: i % 2 ? '#f7faf8' : '#fff' }}>
-          <td style={{ padding: 9, borderBottom: '1px solid #e4ebe6' }}>{ref.assignment.className || ref.assignment.classId} / {ref.assignment.subject || '—'}</td>
-          <td style={{ padding: 9, borderBottom: '1px solid #e4ebe6' }}>{m?.week.name || '—'}</td>
-          <td style={{ padding: 9, borderBottom: '1px solid #e4ebe6' }}>{m?.completion == null ? '—' : m.completion + '%'}</td>
-          <td style={{ padding: 9, borderBottom: '1px solid #e4ebe6' }}>{m?.mastery == null ? '—' : m.mastery + '%'}</td>
-          <td style={{ padding: 9, borderBottom: '1px solid #e4ebe6' }}>{m && <button type="button" style={buttonStyle} onClick={() => open(m)}>عرض التقرير</button>}</td>
-          <td style={{ padding: 9, borderBottom: '1px solid #e4ebe6' }}>{treatments.length ? treatments.map((t) => t.week.name).join('، ') : '—'}</td>
-          <td style={{ padding: 9, borderBottom: '1px solid #e4ebe6' }}>{treatments.length ? 'توجد معالجة مسجلة؛ النتيجة غير مثبتة في هذا السجل' : 'لم تُسجل معالجة مرتبطة'}</td>
-          <td style={{ padding: 9, borderBottom: '1px solid #e4ebe6' }}>{treatments.map((t) => <button type="button" key={t.week.id} style={{ ...buttonStyle, margin: 2 }} onClick={() => open(t)}>عرض التقرير</button>)}</td>
-        </tr>;
-      })}</tbody>
-    </table></div>}
-    {!!rows.length && <p style={{ fontSize: 12, color: colors.textMuted }}>المعالجات التي لا تتضمن رابط مصدر موثق تظهر في صف مستقل، ولا يُفترض أنها نتيجة لقياس محدد.</p>}
+        const ref = m || row.linked[0];
+        return <article key={(m?.week.id || 'unlinked') + i} style={{ border: '1px solid #dce5de', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ padding: 14 }}>
+            <strong>{ref.assignment.className || ref.assignment.classId} | {ref.assignment.subject || 'المادة'}</strong>
+            {m && <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 12, color: colors.textMuted }}>أسبوع القياس</div>
+              {weekControl(m)}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
+                <span style={{ padding: 9, background: '#f4f7f5', borderRadius: 7 }}>اكتمال الرصد: <b>{m.completion == null ? '—' : m.completion + '%'}</b></span>
+                <span style={{ padding: 9, background: '#f4f7f5', borderRadius: 7 }}>الإتقان: <b>{m.mastery == null ? '—' : m.mastery + '%'}</b></span>
+              </div>
+            </div>}
+          </div>
+          {row.linked.length > 0 && <div style={{ borderTop: m ? '1px solid #e1e9e4' : 'none', padding: 14 }}>
+            {m && <strong style={{ fontSize: 13 }}>المعالجات المرتبطة بهذا القياس</strong>}
+            {row.linked.map(t => <div key={t.week.id} style={{ background: '#f7faf8', padding: 11, borderRadius: 8, marginTop: 8 }}>
+              <div style={{ fontSize: 12, color: colors.textMuted }}>أسبوع المعالجة</div>
+              {weekControl(t)}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8, fontSize: 13 }}>
+                <span>اكتمال المعالجة: <b>{t.completion == null ? '—' : t.completion + '%'}</b></span>
+                <span>الإتقان بعد المعالجة: <b>{t.mastery == null ? '—' : t.mastery + '%'}</b></span>
+              </div>
+            </div>)}
+          </div>}
+        </article>;
+      })}
+    </div>
   </section>;
 }
