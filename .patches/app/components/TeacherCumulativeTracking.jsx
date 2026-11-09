@@ -98,7 +98,6 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
       await createNote(schoolId, profile, {
         teacherUid: teacher.uid, teacherName: teacher.displayName || 'المعلمة',
         assignmentId: noteEntry.assignment.id || '', context, kind: noteKind, text: noteText.trim(),
-        reportWeekId: noteEntry.week.id,
       });
       setNoteText(''); setNoteSuccess('تم حفظ الملاحظة وإرسالها للمعلمة.');
     } catch (err) { setNoteError(err?.message || 'تعذّر حفظ الملاحظة.'); }
