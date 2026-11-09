@@ -1,0 +1,22 @@
+// Add inside match /databases/{database}/documents.
+// Depends on the existing isAdminOf(schoolId) and schoolIsActive(schoolId) helpers.
+// Only the school's enabled administrator can read and edit contact numbers.
+match /schools/{schoolId}/adminContacts/{teacherUid} {
+  function validContact(d) {
+    return d.keys().hasAll(['phone','updatedAt','updatedBy'])
+      && d.keys().hasOnly(['phone','updatedAt','updatedBy'])
+      && d.phone is string
+      && d.phone.matches('^[1-9][0-9]{7,14}$')
+      && d.updatedAt is timestamp
+      && d.updatedBy == request.auth.uid;
+  }
+  allow read: if isAdminOf(schoolId);
+  allow create, update: if isAdminOf(schoolId) && schoolIsActive(schoolId)
+    && validContact(request.resource.data)
+    && request.resource.data.updatedAt == request.time
+    && teacherUid.size() > 0 && teacherUid.size() <= 128
+    && exists(/databases/$(database)/documents/users/$(teacherUid))
+    && get(/databases/$(database)/documents/users/$(teacherUid)).data.role == 'teacher'
+    && get(/databases/$(database)/documents/users/$(teacherUid)).data.schoolId == schoolId;
+  allow delete: if false;
+}
