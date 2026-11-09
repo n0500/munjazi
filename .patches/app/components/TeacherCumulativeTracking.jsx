@@ -117,10 +117,32 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
       color: type === 'measurement' ? '#165b85' : '#955319', cursor: 'pointer', overflowWrap: 'anywhere' }}>
     {entry.week.name}
   </button>;
-  const noteButton = (entry) => <button type="button" onClick={() => noteTarget(entry)}
-    style={{ ...buttonStyle, fontSize: 12, padding: '7px 9px', color: '#245840' }}>
-    ✎ ملاحظة إدارية
+  const noteButton = (entry) => <button type="button"
+    aria-label={'إضافة ملاحظة إدارية على ' + (entry.week.type === 'remediation' ? 'معالجة ' : 'قياس ') + entry.week.name}
+    title={'ملاحظة إدارية على ' + entry.week.name}
+    onClick={() => noteTarget(entry)}
+    style={{ ...buttonStyle, fontSize: 12, padding: '8px 6px', color: '#245840', width: '100%', boxSizing: 'border-box' }}>
+    ✎ إضافة ملاحظة
   </button>;
+  const reportActionPanel = (entry, kind) => {
+    const measurement = kind === 'measurement';
+    return <div style={{ minWidth: 0, padding: 9,
+      background: measurement ? '#f4f9fd' : '#fff9f3',
+      border: '1px solid ' + (measurement ? '#d4e7f5' : '#f3dfca'), borderRadius: 9 }}>
+      <div style={{ fontSize: 12, color: measurement ? '#17618b' : '#98521b', fontWeight: 750, marginBottom: 8,
+        overflowWrap: 'anywhere' }}>
+        {measurement ? 'القياس' : 'المعالجة'} · {entry.week.name}
+      </div>
+      <div style={{ display: 'grid', gap: 6 }}>
+        <button type="button" onClick={() => open(entry)}
+          aria-label={'فتح تقرير ' + entry.week.name}
+          style={{ ...buttonStyle, fontSize: 12, padding: '8px 6px', width: '100%', boxSizing: 'border-box' }}>
+          عرض التقرير
+        </button>
+        {noteButton(entry)}
+      </div>
+    </div>;
+  };
   const grouped = Array.from(new Map(rows.map(row => {
     const ref = row.measurement || row.linked[0];
     const a = ref.assignment;
@@ -291,15 +313,9 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
                     </button>
                   </div>
                   {isOpen && <div style={{ marginTop: 10, borderTop: '1px solid #e4ebe5', paddingTop: 10 }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                      {measurement && <button type="button" onClick={() => open(measurement)} style={{ ...buttonStyle, fontSize: 12 }}>
-                        تقرير القياس
-                      </button>}
-                      {treatment && <button type="button" onClick={() => open(treatment)} style={{ ...buttonStyle, fontSize: 12 }}>
-                        تقرير المعالجة
-                      </button>}
-                      {measurement && noteButton(measurement)}
-                      {treatment && noteButton(treatment)}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+                      {measurement ? reportActionPanel(measurement, 'measurement') : <div />}
+                      {treatment ? reportActionPanel(treatment, 'remediation') : <div />}
                     </div>
                     {diff != null && <p style={{ fontSize: 11, margin: '9px 0 0', color: '#728579' }}>
                       الفرق بين نسب الإتقان في التقريرين، وقد تختلف المهارات أو الطالبات المقاسات.
