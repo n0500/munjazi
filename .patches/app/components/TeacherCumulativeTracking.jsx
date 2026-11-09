@@ -6,6 +6,7 @@ import { listClassStudents } from '../lib/studentsApi.js';
 import { colors } from '../lib/theme.js';
 import { useAuth } from '../context/AuthContext.js';
 import { createNote, watchNotes } from '../lib/adminNotesApi.js';
+import { encodeAutoContext, visibleNoteContext, readAutoContext } from '../lib/autoNoteTracking.js';
 
 const normalize = (s) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
 const stamp = (w) => w.createdAt?.seconds || 0;
@@ -56,6 +57,7 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
   const [noteEntry, setNoteEntry] = useState(null);
   const [noteText, setNoteText] = useState('');
   const [noteKind, setNoteKind] = useState('action');
+  const [autoType, setAutoType] = useState('');
   const [noteBusy, setNoteBusy] = useState(false);
   const [noteError, setNoteError] = useState('');
   const [noteSuccess, setNoteSuccess] = useState('');
@@ -85,7 +87,7 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
     subject: e.assignment.subject || '', weekId: e.week.id, weekName: e.week.name, weekType: e.week.type,
   });
   const noteTarget = (e) => {
-    setNoteEntry(e); setNoteText(''); setNoteKind('action'); setNoteError(''); setNoteSuccess(''); setPriorNotes([]);
+    setNoteEntry(e); setNoteText(''); setNoteKind('action'); setAutoType(e.week.type === 'measurement' ? 'remediation' : 'completion'); setNoteError(''); setNoteSuccess(''); setPriorNotes([]);
   };
   async function saveNote(event) {
     event.preventDefault();
@@ -94,7 +96,8 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
     try {
       const teacher = teachers.find(t => t.uid === noteEntry.assignment.teacherUid);
       if (!teacher || teacher.disabled) throw new Error('تعذّر تحديد المعلمة المسؤولة عن التقرير.');
-      const context = [noteEntry.assignment.className || '', noteEntry.assignment.subject || '', noteEntry.week.name].filter(Boolean).join(' · ').slice(0, 600);
+      const baseContext = [noteEntry.assignment.className || '', noteEntry.assignment.subject || '', noteEntry.week.name].filter(Boolean).join(' · ');
+      const context = noteKind === 'action' && autoType ? encodeAutoContext(baseContext, autoType, noteEntry.week.id) : baseContext.slice(0, 600);
       await createNote(schoolId, profile, {
         teacherUid: teacher.uid, teacherName: teacher.displayName || 'المعلمة',
         assignmentId: noteEntry.assignment.id || '', context, kind: noteKind, text: noteText.trim(),
@@ -132,14 +135,22 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
             <option value="action">يتطلب متابعة</option><option value="info">للاطلاع فقط</option>
           </select>
         </label>
-        <label style={{ display: 'block' }}>ملاحظة الإدارة
+        {noteKind === 'action' && <label style={{ display: 'block', marginBottom: 9 }}>متابعة التنفيذ
+          <select value={autoType} onChange={e => setAutoType(e.target.value)} style={{ display: 'block', width: '100%', padding: 9, marginTop: 4 }}>
+            <option value="">تأكيد يدوي (ملاحظة عامة)</option>
+            <option value="completion">تلقائي — استكمال الرصد</option>
+            {noteEntry.week.type === 'measurement' && <option value="remediation">تلقائي — تنفيذ المعالجة</option>}
+            {noteEntry.week.type === 'measurement' && <option value="reassessment">تلقائي — إعادة القياس</option>}
+          </select>
+        </label>}
+                <label style={{ display: 'block' }}>ملاحظة الإدارة
           <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={3} maxLength={2000} required style={{ display: 'block', width: '100%', boxSizing: 'border-box', padding: 10, marginTop: 5, font: 'inherit' }} />
         </label>
         <button type="submit" disabled={noteBusy || !noteText.trim()} style={{ ...buttonStyle, background: colors.primary, color: '#fff', marginTop: 10 }}>{noteBusy ? 'جارٍ الحفظ…' : 'حفظ الملاحظة وإشعار المعلمة'}</button>
       </form>
       {noteSuccess && <p role="status" style={{ color: '#0b5c33' }}>{noteSuccess}</p>}
       {noteError && <p role="alert" style={{ color: '#a22' }}>{noteError}</p>}
-      {priorNotes.filter(n => n.reportWeekId === noteEntry.week.id || (!n.reportWeekId && n.assignmentId === noteEntry.assignment.id && n.context?.split(' · ').at(-1) === noteEntry.week.name)).length > 0 && <div style={{ marginTop: 12, borderTop: '1px solid #dce5de', paddingTop: 10 }}>
+      {priorNotes.filter(n => n.reportWeekId === noteEntry.week.id || (!n.reportWeekId && n.assignmentId === noteEntry.assignment.id && (readAutoContext(n.context)?.sourceWeekId === noteEntry.week.id || visibleNoteContext(n.context).split(' · ').at(-1) === noteEntry.week.name))).length > 0 && <div style={{ marginTop: 12, borderTop: '1px solid #dce5de', paddingTop: 10 }}>
         <strong style={{ fontSize: 13 }}>الملاحظات السابقة وردود المعلمة</strong>
         {priorNotes.filter(n => n.reportWeekId === noteEntry.week.id || (!n.reportWeekId && n.assignmentId === noteEntry.assignment.id && n.context?.split(' · ').at(-1) === noteEntry.week.name)).map(n => <div key={n.id} style={{ padding: 9, border: '1px solid #e2eae5', borderRadius: 7, marginTop: 7, fontSize: 13 }}>
           <div>{n.text}</div>
