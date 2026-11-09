@@ -45,10 +45,12 @@ function NoteCard({ note, schoolId, isAdmin, savedPhone = '', onSavePhone, conta
     finally { setSavingPhone(false); }
   }
   const status = note.completedAt ? 'تم الإجراء' : !note.readAt ? 'لم يُطّلع عليها' : note.kind === 'action' ? 'بانتظار الإجراء' : 'تم الاطلاع';
-  return <article style={box}>
+  const attention = !isAdmin && needsFollowUp(note);
+  const unread = !isAdmin && !note.readAt;
+  return <article style={{ ...box, borderColor: attention ? '#d77a74' : unread ? '#d9ac5c' : colors.border, borderRight: attention ? '4px solid #b9433b' : unread ? '4px solid #c18a32' : undefined, background: attention ? '#fff8f7' : unread ? '#fffbf3' : '#fff' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
       <strong>{isAdmin ? note.teacherName : note.adminName}</strong>
-      <span style={{ color: needsFollowUp(note) ? colors.red : colors.textMuted, fontSize: 12 }}>{status}</span>
+      <span style={{ color: needsFollowUp(note) ? '#a82e2a' : colors.textMuted, fontSize: 12, fontWeight: 700 }}>{status}</span>
     </div>
     <p style={{ margin: '6px 0', fontSize: 13 }}>{note.context || 'ملاحظة عامة'} · {note.kind === 'action' ? 'يتطلب إجراء' : 'للاطلاع'}</p>
     <small>{note.createdAt?.toDate?.().toLocaleString('ar-SA') || 'جارٍ تأكيد الحفظ…'}</small>
@@ -175,12 +177,24 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
   }
 
   const unread = notes.filter(n => !n.readAt).length;
+  const urgentCount = notes.filter(n => n.kind === 'action' && !n.completedAt).length;
+  const infoUnread = notes.filter(n => n.kind === 'info' && !n.readAt).length;
   const pendingCount = notes.filter(needsFollowUp).length;
   const completedCount = notes.filter(isFinished).length;
   const shown = notes.filter(n => filter === 'all' || (filter === 'pending' ? needsFollowUp(n) : isFinished(n)));
 
   return <section dir="rtl" style={{ margin: '16px 0' }}>
-    <button type="button" style={{ ...button, width: '100%', textAlign: 'right' }} aria-expanded={open} onClick={() => setOpen(!open)}>
+    {!isAdmin && !loading && !error && urgentCount > 0 && <div role="status" style={{ border: '1px solid #d77a74', borderRight: '5px solid #b9433b', borderRadius: 10, padding: '14px 16px', marginBottom: 12, background: '#fff5f3', color: '#7f2925' }}>
+      <div style={{ fontWeight: 800, fontSize: 16 }}>⚠ تنبيه من إدارة المدرسة</div>
+      <p style={{ margin: '8px 0 12px', fontSize: 14 }}>لديك {urgentCount} {urgentCount === 1 ? 'ملاحظة إدارية تتطلب إجراءً' : 'ملاحظات إدارية تتطلب إجراءً'}{unread > 0 ? `، منها ${unread} لم يُطّلع عليها بعد` : ''}.</p>
+      <button type="button" onClick={() => { setFilter('pending'); setOpen(true); }} style={{ ...button, background: '#a8322e', borderColor: '#a8322e' }}>عرض الملاحظات والتفاصيل</button>
+    </div>}
+    {!isAdmin && !loading && !error && urgentCount === 0 && infoUnread > 0 && <div role="status" style={{ border: '1px solid #e3c28c', borderRight: '5px solid #b78328', borderRadius: 10, padding: 14, marginBottom: 12, background: '#fff9ed', color: '#76501b' }}>
+      <strong>🔔 ملاحظة إدارية للاطلاع</strong>
+      <p style={{ margin: '7px 0 10px', fontSize: 13 }}>لديك {infoUnread} {infoUnread === 1 ? 'ملاحظة جديدة' : 'ملاحظات جديدة'} من إدارة المدرسة.</p>
+      <button type="button" onClick={() => { setFilter('all'); setOpen(true); }} style={{ ...button, background: '#94641e', borderColor: '#94641e' }}>عرض الملاحظات</button>
+    </div>}
+    <button type="button" style={{ ...button, width: '100%', textAlign: 'right', background: !isAdmin && urgentCount > 0 ? '#a8322e' : !isAdmin && infoUnread > 0 ? '#94641e' : colors.primary }}  aria-expanded={open} onClick={() => setOpen(!open)}>
       ملاحظات الإدارة {loading ? '…' : `(${unread} غير مقروءة · ${pendingCount} بانتظار المتابعة)`}{error ? ' — تعذّر التحديث' : ''}
     </button>
     {open && <div style={{ marginTop: 12 }}>
