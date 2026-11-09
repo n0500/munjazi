@@ -488,7 +488,7 @@ export default function AdminDashboard({ schoolId }) {
     }
     if (reportTarget) {
         return (_jsxs(_Fragment, { children: [
-            _jsx(ReportNoteComposer, { schoolId: schoolId, reportTarget: reportTarget, teachers: teachers, assignments: assignments, onOpenNotes: () => { setReportTarget(null); setActiveTab('notes'); } }),
+            activeTab !== 'trackingPreview' && _jsx(ReportNoteComposer, { schoolId: schoolId, reportTarget: reportTarget, teachers: teachers, assignments: assignments, onOpenNotes: () => { setReportTarget(null); setActiveTab('notes'); } }),
             _jsx(Suspense, { fallback: _jsx(SectionLoading, {}), children: _jsx(ClassReport, { schoolId: schoolId, classId: reportTarget.classId, teacherUid: reportTarget.teacherUid, assignmentId: reportTarget.assignmentId, className: reportTarget.className, subject: reportTarget.subject, teacherName: reportTarget.teacherName, defaultWeekId: reportTarget.weekId, defaultWeekName: reportTarget.weekName, onBack: () => setReportTarget(null) }) })
         ] }));
     }
