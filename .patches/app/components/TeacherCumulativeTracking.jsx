@@ -81,7 +81,7 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
   </span>;
   return <section dir="rtl" style={{ border: '1px solid #dce5de', borderRadius: 12, padding: 16, marginBottom: 20 }}>
     <h3 style={{ marginTop: 0 }}>تجربة متابعة المعلمة — القياس والمعالجة</h3>
-    <p style={{ fontSize: 13, color: colors.textMuted }}>نموذج مستقل للاختبار. اضغطي اسم الأسبوع لفتح التقرير الكامل، أو رمز القلم لكتابة ملاحظة على التقرير.</p>
+    <p style={{ fontSize: 13, color: colors.textMuted }}>نموذج مستقل للاختبار. القياس على اليمين والمعالجة المقابلة له على اليسار. اضغطي اسم الأسبوع لفتح التقرير، أو رمز القلم للوصول إلى ملاحظته.</p>
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'end', marginBottom: 14 }}>
       <label>المعلمة <select value={teacherUid} onChange={(e) => {setTeacherUid(e.target.value);setClassFilter('all');}} style={{ display: 'block', padding: 9, minWidth: 160 }}>
         <option value="">اختاري المعلمة</option>{teachers.map(t => <option key={t.uid} value={t.uid}>{t.displayName}</option>)}
@@ -97,29 +97,27 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
       {rows.map((row, i) => {
         const m = row.measurement;
         const ref = m || row.linked[0];
-        return <article key={(m?.week.id || 'unlinked') + i} style={{ border: '1px solid #dce5de', borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ padding: 14 }}>
-            <strong>{ref.assignment.className || ref.assignment.classId} | {ref.assignment.subject || 'المادة'}</strong>
-            {m && <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 12, color: colors.textMuted }}>أسبوع القياس</div>
-              {weekControl(m)}
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
-                <span style={{ padding: 9, background: '#f4f7f5', borderRadius: 7 }}>اكتمال الرصد: <b>{m.completion == null ? '—' : m.completion + '%'}</b></span>
-                <span style={{ padding: 9, background: '#f4f7f5', borderRadius: 7 }}>الإتقان: <b>{m.mastery == null ? '—' : m.mastery + '%'}</b></span>
-              </div>
-            </div>}
-          </div>
-          {row.linked.length > 0 && <div style={{ borderTop: m ? '1px solid #e1e9e4' : 'none', padding: 14 }}>
-            {m && <strong style={{ fontSize: 13 }}>المعالجات المرتبطة بهذا القياس</strong>}
-            {row.linked.map(t => <div key={t.week.id} style={{ background: '#f7faf8', padding: 11, borderRadius: 8, marginTop: 8 }}>
-              <div style={{ fontSize: 12, color: colors.textMuted }}>أسبوع المعالجة</div>
-              {weekControl(t)}
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8, fontSize: 13 }}>
-                <span>اكتمال المعالجة: <b>{t.completion == null ? '—' : t.completion + '%'}</b></span>
-                <span>الإتقان بعد المعالجة: <b>{t.mastery == null ? '—' : t.mastery + '%'}</b></span>
-              </div>
-            </div>)}
-          </div>}
+        const treatments = row.linked.length ? row.linked : [null];
+        const metric = (label, value) => <div style={{ textAlign: 'center', flex: 1, minWidth: 0, background: '#f4f7f5', padding: '8px 3px', borderRadius: 7 }}>
+          <div style={{ fontSize: 11, color: colors.textMuted }}>{label}</div>
+          <strong style={{ display: 'block', fontSize: 18, marginTop: 4 }}>{value == null ? '—' : value + '%'}</strong>
+        </div>;
+        const pane = (entry, kind, show) => <div style={{ flex: 1, minWidth: 0, padding: 10, background: kind === 'remediation' ? '#f7faf8' : '#fff', borderRadius: 8 }}>
+          {show && entry && <>
+            <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 5 }}>{kind === 'measurement' ? 'أسبوع القياس' : 'أسبوع المعالجة'}</div>
+            {weekControl(entry)}
+            <div style={{ display: 'flex', gap: 5, marginTop: 9 }}>
+              {metric(kind === 'measurement' ? 'اكتمال الرصد' : 'اكتمال المعالجة', entry.completion)}
+              {metric(kind === 'measurement' ? 'الإتقان' : 'الإتقان بعد المعالجة', entry.mastery)}
+            </div>
+          </>}
+        </div>;
+        return <article key={(m?.week.id || 'unlinked') + i} style={{ border: '1px solid #dce5de', borderRadius: 12, padding: 10 }}>
+          <div style={{ fontWeight: 700, marginBottom: 9, fontSize: 13 }}>{ref.assignment.className || ref.assignment.classId} | {ref.assignment.subject || 'المادة'}</div>
+          {treatments.map((t, index) => <div key={t?.week.id || 'empty'} style={{ display: 'flex', gap: 7, alignItems: 'stretch', marginTop: index ? 7 : 0, borderTop: index ? '1px solid #e4ebe6' : 'none', paddingTop: index ? 7 : 0 }}>
+            {pane(m, 'measurement', index === 0)}
+            {pane(t, 'remediation', Boolean(t))}
+          </div>)}
         </article>;
       })}
     </div>
