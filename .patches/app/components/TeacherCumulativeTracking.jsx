@@ -4,6 +4,8 @@ import { listSkillsForWeek } from '../lib/skillsApi.js';
 import { listAssessmentsForSkill } from '../lib/assessmentsApi.js';
 import { listClassStudents } from '../lib/studentsApi.js';
 import { colors } from '../lib/theme.js';
+import { useAuth } from '../context/AuthContext.js';
+import { createNote, watchNotes } from '../lib/adminNotesApi.js';
 
 const normalize = (s) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
 const stamp = (w) => w.createdAt?.seconds || 0;
@@ -50,12 +52,24 @@ function buildRows(entries) {
 }
 
 export default function TeacherCumulativeTracking({ schoolId, assignments, teachers, onReport }) {
+  const { profile } = useAuth();
+  const [noteEntry, setNoteEntry] = useState(null);
+  const [noteText, setNoteText] = useState('');
+  const [noteKind, setNoteKind] = useState('action');
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteError, setNoteError] = useState('');
+  const [noteSuccess, setNoteSuccess] = useState('');
+  const [priorNotes, setPriorNotes] = useState([]);
   const [teacherUid, setTeacherUid] = useState('');
   const [classFilter, setClassFilter] = useState('all');
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => { setEntries([]); }, [teacherUid, schoolId]);
+  useEffect(() => {
+    if (!noteEntry) return;
+    return watchNotes(schoolId, noteEntry.assignment.teacherUid, setPriorNotes, err => setNoteError(err.message || 'تعذّر تحميل الملاحظات.'));
+  }, [schoolId, noteEntry]);
   const teacherAssignments = assignments.filter((a) => a.teacherUid === teacherUid && a.active !== false);
   async function load() {
     if (!teacherUid) return;
@@ -70,11 +84,26 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
     className: e.assignment.className || '', teacherName: e.assignment.teacherName || '',
     subject: e.assignment.subject || '', weekId: e.week.id, weekName: e.week.name,
   });
-  const noteTarget = (e) => onReport({
-    classId: e.assignment.classId, teacherUid: e.assignment.teacherUid, assignmentId: e.assignment.id,
-    className: e.assignment.className || '', teacherName: e.assignment.teacherName || '',
-    subject: e.assignment.subject || '', weekId: e.week.id, weekName: e.week.name,
-  });
+  const noteTarget = (e) => {
+    setNoteEntry(e); setNoteText(''); setNoteKind('action'); setNoteError(''); setNoteSuccess(''); setPriorNotes([]);
+  };
+  async function saveNote(event) {
+    event.preventDefault();
+    if (!noteEntry || !noteText.trim() || noteBusy) return;
+    setNoteBusy(true); setNoteError(''); setNoteSuccess('');
+    try {
+      const teacher = teachers.find(t => t.uid === noteEntry.assignment.teacherUid);
+      if (!teacher || teacher.disabled) throw new Error('تعذّر تحديد المعلمة المسؤولة عن التقرير.');
+      const context = [noteEntry.assignment.className || '', noteEntry.assignment.subject || '', noteEntry.week.name].filter(Boolean).join(' · ').slice(0, 600);
+      await createNote(schoolId, profile, {
+        teacherUid: teacher.uid, teacherName: teacher.displayName || 'المعلمة',
+        assignmentId: noteEntry.assignment.id || '', context, kind: noteKind, text: noteText.trim(),
+        reportWeekId: noteEntry.week.id,
+      });
+      setNoteText(''); setNoteSuccess('تم حفظ الملاحظة وإرسالها للمعلمة.');
+    } catch (err) { setNoteError(err?.message || 'تعذّر حفظ الملاحظة.'); }
+    finally { setNoteBusy(false); }
+  }
   const weekControl = (e) => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
     <button type="button" style={{ ...buttonStyle, border: 'none', textDecoration: 'underline', fontWeight: 700 }} onClick={() => open(e)} aria-label={'فتح تقرير ' + e.week.name}>{e.week.name}</button>
     <button type="button" title="ملاحظة المديرة على هذا التقرير" aria-label={'ملاحظة على ' + e.week.name} onClick={() => noteTarget(e)} style={{ ...buttonStyle, padding: '5px 8px' }}>✎</button>
@@ -93,6 +122,33 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
     </div>
     {error && <p role="alert" style={{ color: '#a22' }}>{error}</p>}
     {!loading && teacherUid && !entries.length && <p style={{ color: colors.textMuted }}>لا توجد تقارير محمّلة لهذه المعلمة.</p>}
+    {noteEntry && <div role="dialog" aria-label="ملاحظة المديرة على التقرير" style={{ border: '1px solid #a8c5b6', borderRadius: 12, padding: 14, marginBottom: 16, background: '#fafdfb' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+        <strong>ملاحظة المديرة — {noteEntry.assignment.className || ''} · {noteEntry.week.name}</strong>
+        <button type="button" style={buttonStyle} onClick={() => setNoteEntry(null)}>إغلاق</button>
+      </div>
+      <form onSubmit={saveNote} style={{ marginTop: 12 }}>
+        <label style={{ display: 'block', marginBottom: 9 }}>نوع الملاحظة
+          <select value={noteKind} onChange={e => setNoteKind(e.target.value)} style={{ display: 'block', width: '100%', padding: 9, marginTop: 4 }}>
+            <option value="action">يتطلب متابعة</option><option value="info">للاطلاع فقط</option>
+          </select>
+        </label>
+        <label style={{ display: 'block' }}>ملاحظة الإدارة
+          <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={3} maxLength={2000} required style={{ display: 'block', width: '100%', boxSizing: 'border-box', padding: 10, marginTop: 5, font: 'inherit' }} />
+        </label>
+        <button type="submit" disabled={noteBusy || !noteText.trim()} style={{ ...buttonStyle, background: colors.primary, color: '#fff', marginTop: 10 }}>{noteBusy ? 'جارٍ الحفظ…' : 'حفظ الملاحظة وإشعار المعلمة'}</button>
+      </form>
+      {noteSuccess && <p role="status" style={{ color: '#0b5c33' }}>{noteSuccess}</p>}
+      {noteError && <p role="alert" style={{ color: '#a22' }}>{noteError}</p>}
+      {priorNotes.filter(n => n.reportWeekId === noteEntry.week.id || (!n.reportWeekId && n.assignmentId === noteEntry.assignment.id && n.context?.split(' · ').at(-1) === noteEntry.week.name)).length > 0 && <div style={{ marginTop: 12, borderTop: '1px solid #dce5de', paddingTop: 10 }}>
+        <strong style={{ fontSize: 13 }}>الملاحظات السابقة وردود المعلمة</strong>
+        {priorNotes.filter(n => n.reportWeekId === noteEntry.week.id || (!n.reportWeekId && n.assignmentId === noteEntry.assignment.id && n.context?.split(' · ').at(-1) === noteEntry.week.name)).map(n => <div key={n.id} style={{ padding: 9, border: '1px solid #e2eae5', borderRadius: 7, marginTop: 7, fontSize: 13 }}>
+          <div>{n.text}</div>
+          {n.reply && <div style={{ marginTop: 5, color: colors.primary }}>رد المعلمة: {n.reply}</div>}
+          <small style={{ color: colors.textMuted }}>{n.completedAt ? 'تمت المتابعة' : n.kind === 'action' ? 'بانتظار المتابعة' : 'للاطلاع'}</small>
+        </div>)}
+      </div>}
+    </div>}
     <div style={{ display: 'grid', gap: 12 }}>
       {rows.map((row, i) => {
         const m = row.measurement;
