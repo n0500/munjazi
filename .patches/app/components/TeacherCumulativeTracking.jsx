@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { listWeeksForClass } from '../lib/weeksApi.js';
 import { listSkillsForWeek } from '../lib/skillsApi.js';
 import { listAssessmentsForSkill } from '../lib/assessmentsApi.js';
@@ -55,6 +55,8 @@ function buildRows(entries) {
 export default function TeacherCumulativeTracking({ schoolId, assignments, teachers, onReport }) {
   const { profile } = useAuth();
   const [noteEntry, setNoteEntry] = useState(null);
+  const noteDialogRef = useRef(null);
+  const [expanded, setExpanded] = useState({});
   const [noteText, setNoteText] = useState('');
   const [noteKind, setNoteKind] = useState('action');
   const [autoType, setAutoType] = useState('');
@@ -67,7 +69,8 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  useEffect(() => { setEntries([]); }, [teacherUid, schoolId]);
+  useEffect(() => { setEntries([]); setExpanded({}); setNoteEntry(null); }, [teacherUid, schoolId]);
+  useEffect(() => { if (noteEntry) noteDialogRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); }, [noteEntry]);
   useEffect(() => {
     if (!noteEntry) return;
     return watchNotes(schoolId, noteEntry.assignment.teacherUid, setPriorNotes, err => setNoteError(err.message || 'تعذّر تحميل الملاحظات.'));
@@ -106,25 +109,103 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
     } catch (err) { setNoteError(err?.message || 'تعذّر حفظ الملاحظة.'); }
     finally { setNoteBusy(false); }
   }
-  const weekControl = (e) => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-    <button type="button" style={{ ...buttonStyle, border: 'none', textDecoration: 'underline', fontWeight: 700, color: e.week.type === 'remediation' ? '#98521b' : '#17618b', background: 'transparent', padding: '5px 2px' }} onClick={() => open(e)} aria-label={'فتح تقرير ' + e.week.name}>{e.week.name}</button>
-    <button type="button" title="ملاحظة المديرة على هذا التقرير" aria-label={'ملاحظة على ' + e.week.name} onClick={() => noteTarget(e)} style={{ ...buttonStyle, padding: '5px 8px' }}>✎</button>
-  </span>;
-  return <section dir="rtl" style={{ border: '1px solid #dce5de', borderRadius: 12, padding: 16, marginBottom: 20 }}>
-    <h3 style={{ marginTop: 0 }}>تجربة متابعة المعلمة — القياس والمعالجة</h3>
-    <p style={{ fontSize: 13, color: colors.textMuted }}>نموذج مستقل للاختبار. القياس على اليمين والمعالجة المقابلة له على اليسار. اضغطي اسم الأسبوع لفتح التقرير، أو رمز القلم للوصول إلى ملاحظته.</p>
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'end', marginBottom: 14 }}>
-      <label>المعلمة <select value={teacherUid} onChange={(e) => {setTeacherUid(e.target.value);setClassFilter('all');}} style={{ display: 'block', padding: 9, minWidth: 160 }}>
-        <option value="">اختاري المعلمة</option>{teachers.map(t => <option key={t.uid} value={t.uid}>{t.displayName}</option>)}
-      </select></label>
-      <label>الفصل <select value={classFilter} onChange={e => setClassFilter(e.target.value)} style={{ display: 'block', padding: 9, minWidth: 130 }}>
-        <option value="all">جميع الفصول</option>{teacherAssignments.map(a => <option key={a.id} value={a.classId}>{a.className || a.classId}</option>)}
-      </select></label>
-      <button type="button" onClick={load} disabled={!teacherUid || loading} style={buttonStyle}>{loading ? 'جارٍ التحميل...' : 'عرض / تحديث'}</button>
+  const weekLink = (entry, type) => <button type="button"
+    onClick={() => open(entry)}
+    title={'فتح تقرير ' + entry.week.name}
+    style={{ background: 'none', border: 'none', padding: '4px 0', fontSize: 14, lineHeight: 1.5,
+      fontWeight: 750, textAlign: 'right', textDecoration: 'underline', textUnderlineOffset: 3,
+      color: type === 'measurement' ? '#165b85' : '#955319', cursor: 'pointer', overflowWrap: 'anywhere' }}>
+    {entry.week.name}
+  </button>;
+  const noteButton = (entry) => <button type="button" onClick={() => noteTarget(entry)}
+    style={{ ...buttonStyle, fontSize: 12, padding: '7px 9px', color: '#245840' }}>
+    ✎ ملاحظة إدارية
+  </button>;
+  const grouped = Array.from(new Map(rows.map(row => {
+    const ref = row.measurement || row.linked[0];
+    const a = ref.assignment;
+    return [a.id || a.classId + ':' + a.subject, a];
+  })).entries());
+  const metricPanel = (entry, type) => {
+    const measurement = type === 'measurement';
+    const fg = measurement ? '#165b85' : '#955319';
+    const accent = measurement ? '#d7e8f4' : '#f5dfc9';
+    const surface = measurement ? '#f5faff' : '#fff9f3';
+    return <div style={{ minWidth: 0, padding: '11px 10px', border: '1px solid ' + accent,
+      background: surface, borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <div style={{ color: fg, fontSize: 12, fontWeight: 750, display: 'flex', gap: 6, alignItems: 'center' }}>
+        <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: 99, background: fg, flexShrink: 0 }} />
+        {measurement ? 'القياس' : 'المعالجة والمتابعة'}
+      </div>
+      {entry ? <>
+        {weekLink(entry, type)}
+        <div style={{ borderRadius: 8, background: measurement ? '#eaf3fb' : '#fff0e1', padding: '8px 9px' }}>
+          <div style={{ fontSize: 11, color: fg }}>{measurement ? 'نسبة الإتقان' : 'الإتقان بعد المعالجة'}</div>
+          <strong style={{ display: 'block', marginTop: 1, fontSize: 23, lineHeight: 1.3, color: '#18392b' }}>
+            {entry.mastery == null ? '—' : entry.mastery + '%'}
+          </strong>
+        </div>
+        <div style={{ fontSize: 11, color: '#547063', lineHeight: 1.45 }}>
+          اكتمال {measurement ? 'الرصد' : 'المعالجة'}: <strong style={{ color: '#284a38' }}>{entry.completion == null ? '—' : entry.completion + '%'}</strong>
+        </div>
+      </> : <div style={{ flex: 1, minHeight: 78, display: 'flex', alignItems: 'center',
+        fontSize: 12, color: '#73867b' }}>
+        {measurement ? 'لا يوجد قياس مرتبط' : 'لا توجد معالجة مرتبطة'}
+      </div>}
+    </div>;
+  };
+  return <section dir="rtl" style={{ border: '1px solid #dce5de', borderRadius: 14,
+      padding: '14px clamp(10px, 2.5vw, 18px)', marginBottom: 20, fontFamily: 'inherit' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+      <div>
+        <h3 style={{ margin: '0 0 3px', color: '#1b3e2b', fontSize: 19 }}>متابعة القياس والمعالجة</h3>
+        <p style={{ margin: 0, color: colors.textMuted, fontSize: 12 }}>
+          مقارنة مرتبة حسب المعلمة والفصل، مع الوصول للتقارير والملاحظات عند الطلب.
+        </p>
+      </div>
+      <span aria-hidden="true" style={{ display: 'grid', placeItems: 'center',
+        width: 34, height: 34, background: '#eaf2ed', borderRadius: 10, fontSize: 17, flexShrink: 0 }}>▥</span>
+    </div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 9, alignItems: 'end', marginBottom: 11 }}>
+      <label style={{ fontSize: 12, color: '#536c5d', minWidth: 0 }}>
+        المعلمة
+        <select value={teacherUid} onChange={e => { setTeacherUid(e.target.value); setClassFilter('all'); }}
+          style={{ display: 'block', width: '100%', boxSizing: 'border-box', minWidth: 0,
+            marginTop: 4, borderRadius: 8, padding: '9px 6px', border: '1px solid #d4e1d8', font: 'inherit',
+            fontSize: 13, background: '#fff', color: '#203c2c' }}>
+          <option value="">اختاري المعلمة</option>
+          {teachers.map(t => <option key={t.uid} value={t.uid}>{t.displayName}</option>)}
+        </select>
+      </label>
+      <label style={{ fontSize: 12, color: '#536c5d', minWidth: 0 }}>
+        الفصل
+        <select value={classFilter} onChange={e => setClassFilter(e.target.value)}
+          style={{ display: 'block', width: '100%', boxSizing: 'border-box', minWidth: 0,
+            marginTop: 4, borderRadius: 8, padding: '9px 6px', border: '1px solid #d4e1d8',
+            font: 'inherit', fontSize: 13, background: '#fff', color: '#203c2c' }}>
+          <option value="all">جميع الفصول</option>
+          {Array.from(new Map(teacherAssignments.map(a => [a.classId, a])).values())
+            .map(a => <option key={a.classId} value={a.classId}>{a.className || a.classId}</option>)}
+        </select>
+      </label>
+    </div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
+      alignItems: 'center', marginBottom: 13 }}>
+      <span style={{ color: colors.textMuted, fontSize: 11 }}>
+        {teacherUid && entries.length ? `${grouped.length} فصول · ${rows.length} سجلات قياس/متابعة` : 'اختاري المعلمة لعرض سجلها'}
+      </span>
+      <button type="button" disabled={!teacherUid || loading} onClick={load}
+        style={{ ...buttonStyle, fontSize: 12, fontWeight: 700, minHeight: 34,
+          opacity: !teacherUid || loading ? 0.55 : 1 }}>
+        {loading ? 'جارٍ تحميل النتائج…' : entries.length ? '↻ تحديث النتائج' : 'عرض النتائج'}
+      </button>
     </div>
     {error && <p role="alert" style={{ color: '#a22' }}>{error}</p>}
-    {!loading && teacherUid && !entries.length && <p style={{ color: colors.textMuted }}>لا توجد تقارير محمّلة لهذه المعلمة.</p>}
-    {noteEntry && <div role="dialog" aria-label="ملاحظة المديرة على التقرير" style={{ border: '1px solid #a8c5b6', borderRadius: 12, padding: 14, marginBottom: 16, background: '#fafdfb' }}>
+    {loading && <p role="status" style={{ fontSize: 13, color: colors.textMuted }}>جارٍ تحميل أسابيع القياس والمعالجة…</p>}
+    {!loading && teacherUid && !entries.length && <p style={{ color: colors.textMuted, fontSize: 13 }}>
+      لا توجد نتائج محمّلة لهذه المعلمة. اضغطي «عرض النتائج» للتحقق من السجل.
+    </p>}
+    {noteEntry && <div ref={noteDialogRef} role="dialog" aria-label="ملاحظة المديرة على التقرير" style={{ border: '1px solid #a8c5b6', borderRadius: 12, padding: 14, marginBottom: 16, background: '#fafdfb' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
         <strong>ملاحظة المديرة — {noteEntry.assignment.className || ''} · {noteEntry.week.name}</strong>
         <button type="button" style={buttonStyle} onClick={() => setNoteEntry(null)}>إغلاق</button>
@@ -152,51 +233,80 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
       {noteError && <p role="alert" style={{ color: '#a22' }}>{noteError}</p>}
       {priorNotes.filter(n => n.reportWeekId === noteEntry.week.id || (!n.reportWeekId && n.assignmentId === noteEntry.assignment.id && (readAutoContext(n.context)?.sourceWeekId === noteEntry.week.id || visibleNoteContext(n.context).split(' · ').at(-1) === noteEntry.week.name))).length > 0 && <div style={{ marginTop: 12, borderTop: '1px solid #dce5de', paddingTop: 10 }}>
         <strong style={{ fontSize: 13 }}>الملاحظات السابقة وردود المعلمة</strong>
-        {priorNotes.filter(n => n.reportWeekId === noteEntry.week.id || (!n.reportWeekId && n.assignmentId === noteEntry.assignment.id && n.context?.split(' · ').at(-1) === noteEntry.week.name)).map(n => <div key={n.id} style={{ padding: 9, border: '1px solid #e2eae5', borderRadius: 7, marginTop: 7, fontSize: 13 }}>
+        {priorNotes.filter(n => n.reportWeekId === noteEntry.week.id || (!n.reportWeekId && n.assignmentId === noteEntry.assignment.id && (readAutoContext(n.context)?.sourceWeekId === noteEntry.week.id || visibleNoteContext(n.context).split(' · ').at(-1) === noteEntry.week.name))).map(n => <div key={n.id} style={{ padding: 9, border: '1px solid #e2eae5', borderRadius: 7, marginTop: 7, fontSize: 13 }}>
           <div>{n.text}</div>
           {n.reply && <div style={{ marginTop: 5, color: colors.primary }}>رد المعلمة: {n.reply}</div>}
           <small style={{ color: colors.textMuted }}>{n.completedAt ? 'تمت المتابعة' : n.kind === 'action' ? 'بانتظار المتابعة' : 'للاطلاع'}</small>
         </div>)}
       </div>}
     </div>}
-    <div style={{ display: 'grid', gap: 18 }}>
-      {Array.from(new Map(rows.map(row => {
-        const ref = row.measurement || row.linked[0];
-        return [ref.assignment.id || ref.assignment.classId + ':' + ref.assignment.subject, ref.assignment];
-      })).entries()).map(([assignmentKey, assignment]) => {
+
+    <div style={{ display: 'grid', gap: 13 }}>
+      {grouped.map(([assignmentKey, assignment]) => {
         const classRows = rows.filter(row => {
           const a = (row.measurement || row.linked[0]).assignment;
           return (a.id || a.classId + ':' + a.subject) === assignmentKey;
         });
-        const metric = (label, value, kind) => <div style={{ textAlign: 'center', flex: 1, minWidth: 0, background: kind === 'measurement' ? '#eaf3fa' : '#fff1e5', padding: '8px 3px', borderRadius: 7 }}>
-          <div style={{ fontSize: 11, color: kind === 'measurement' ? '#3a6581' : '#95602e' }}>{label}</div>
-          <strong style={{ display: 'block', fontSize: 18, marginTop: 4, color: '#20362c' }}>{value == null ? '—' : value + '%'}</strong>
-        </div>;
-        const pane = (entry, kind, show) => <div style={{ flex: 1, minWidth: 0, padding: 9, background: kind === 'measurement' ? '#f4f9fd' : '#fff9f3', border: '1px solid ' + (kind === 'measurement' ? '#d4e7f5' : '#f3dfca'), borderRadius: 9 }}>
-          {show && entry && <>
-            <div style={{ fontSize: 12, fontWeight: 700, color: kind === 'measurement' ? '#17618b' : '#98521b', marginBottom: 5 }}>{kind === 'measurement' ? 'القياس' : 'المعالجة والمتابعة'}</div>
-            {weekControl(entry)}
-            <div style={{ display: 'flex', gap: 5, marginTop: 9 }}>
-              {metric(kind === 'measurement' ? 'اكتمال الرصد' : 'اكتمال المعالجة', entry.completion, kind)}
-              {metric(kind === 'measurement' ? 'الإتقان' : 'الإتقان بعد المعالجة', entry.mastery, kind)}
+        const totalMeasurements = classRows.filter(row => !!row.measurement).length;
+        const totalRemediations = classRows.reduce((sum, row) => sum + row.linked.length, 0);
+        return <section key={assignmentKey} style={{ border: '1px solid #d8e5dc',
+          borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
+          <header style={{ background: '#e9f3ed', borderBottom: '1px solid #d8e5dc',
+            padding: '10px 12px', color: '#1c4e35' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 4, alignItems: 'baseline' }}>
+              <strong style={{ fontSize: 15 }}>{assignment.className || assignment.classId}</strong>
+              <span style={{ fontSize: 11, color: '#597d67' }}>
+                {totalMeasurements} قياس · {totalRemediations} معالجة
+              </span>
             </div>
-          </>}
-        </div>;
-        return <section key={assignmentKey} style={{ border: '1px solid #d6e2da', borderRadius: 12, overflow: 'hidden' }}>
-          <header style={{ background: '#e8f1eb', padding: '12px 14px', borderBottom: '1px solid #d6e2da', color: '#204e38', fontWeight: 700 }}>
-            {assignment.className || assignment.classId} <span style={{ color: '#658174', fontWeight: 400 }}> | {assignment.subject || 'المادة'}</span>
-            <span style={{ float: 'left', fontSize: 12, fontWeight: 400 }}>{classRows.length} قياس/سجل</span>
+            <div style={{ marginTop: 2, color: '#597d67', fontSize: 12 }}>{assignment.subject || 'المادة'}</div>
           </header>
-          <div style={{ padding: 10, display: 'grid', gap: 10 }}>
-            {classRows.map((row, i) => {
-              const m = row.measurement;
+          <div style={{ padding: 9, display: 'grid', gap: 9 }}>
+            {classRows.flatMap(row => {
               const treatments = row.linked.length ? row.linked : [null];
-              return <article key={(m?.week.id || 'unlinked') + i} style={{ borderBottom: i < classRows.length - 1 ? '1px solid #e2e9e4' : 'none', paddingBottom: i < classRows.length - 1 ? 10 : 0 }}>
-                {treatments.map((t, index) => <div key={t?.week.id || 'empty'} style={{ display: 'flex', gap: 8, alignItems: 'stretch', marginTop: index ? 8 : 0 }}>
-                  {pane(m, 'measurement', index === 0)}
-                  {pane(t, 'remediation', Boolean(t))}
-                </div>)}
-              </article>;
+              return treatments.map(treatment => {
+                const measurement = row.measurement;
+                const id = (measurement?.week.id || 'unlinked') + ':' + (treatment?.week.id || 'none');
+                const isOpen = !!expanded[id];
+                const diff = measurement?.mastery != null && treatment?.mastery != null
+                  ? treatment.mastery - measurement.mastery : null;
+                const diffText = diff == null ? '' : diff > 0
+                  ? 'فرق مؤشر الإتقان: +' + diff + ' نقطة مئوية'
+                  : diff < 0 ? 'فرق مؤشر الإتقان: ' + diff + ' نقاط مئوية'
+                  : 'مؤشر الإتقان دون تغير';
+                const diffColor = diff == null ? '#64796b' : diff > 0 ? '#157347' : diff < 0 ? '#ae4037' : '#64796b';
+                return <article key={id} style={{ border: '1px solid #e5ece7', borderRadius: 10, padding: 9 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 7 }}>
+                    {metricPanel(measurement, 'measurement')}
+                    {metricPanel(treatment, 'remediation')}
+                  </div>
+                  <div style={{ marginTop: 9, display: 'flex', alignItems: 'center',
+                    justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, fontWeight: diff != null ? 700 : 400, color: diffColor }}>
+                      {diff != null ? diffText : treatment && !measurement ? 'معالجة دون قياس مرتبط' : measurement && !treatment ? 'لم تسجّل معالجة مرتبطة' : ''}
+                    </span>
+                    <button type="button" aria-expanded={isOpen} onClick={() => setExpanded(current => ({ ...current, [id]: !current[id] }))}
+                      style={{ ...buttonStyle, padding: '6px 9px', fontSize: 11, color: '#356b50' }}>
+                      {isOpen ? 'إخفاء التفاصيل −' : 'التفاصيل والملاحظات +'}
+                    </button>
+                  </div>
+                  {isOpen && <div style={{ marginTop: 10, borderTop: '1px solid #e4ebe5', paddingTop: 10 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                      {measurement && <button type="button" onClick={() => open(measurement)} style={{ ...buttonStyle, fontSize: 12 }}>
+                        تقرير القياس
+                      </button>}
+                      {treatment && <button type="button" onClick={() => open(treatment)} style={{ ...buttonStyle, fontSize: 12 }}>
+                        تقرير المعالجة
+                      </button>}
+                      {measurement && noteButton(measurement)}
+                      {treatment && noteButton(treatment)}
+                    </div>
+                    {diff != null && <p style={{ fontSize: 11, margin: '9px 0 0', color: '#728579' }}>
+                      الفرق بين نسب الإتقان في التقريرين، وقد تختلف المهارات أو الطالبات المقاسات.
+                    </p>}
+                  </div>}
+                </article>;
+              });
             })}
           </div>
         </section>;
