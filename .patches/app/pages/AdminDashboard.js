@@ -1,4 +1,5 @@
 import AdminNotes from '../components/AdminNotes.jsx';
+import ReportNoteComposer from '../components/ReportNoteComposer.jsx';
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { Suspense, lazy, useEffect, useState } from 'react';
 import { getSchool } from '../lib/schoolsApi.js';
@@ -484,7 +485,10 @@ export default function AdminDashboard({ schoolId }) {
         return _jsx(ClassDetail, { schoolId: schoolId, classId: selectedClassId, allClasses: classes, onBack: () => { setSelectedClassId(null); refresh(); } });
     }
     if (reportTarget) {
-        return (_jsx(Suspense, { fallback: _jsx(SectionLoading, {}), children: _jsx(ClassReport, { schoolId: schoolId, classId: reportTarget.classId, teacherUid: reportTarget.teacherUid, assignmentId: reportTarget.assignmentId, className: reportTarget.className, subject: reportTarget.subject, teacherName: reportTarget.teacherName, defaultWeekId: reportTarget.weekId, defaultWeekName: reportTarget.weekName, onBack: () => setReportTarget(null) }) }));
+        return (_jsxs(_Fragment, { children: [
+            _jsx(ReportNoteComposer, { schoolId: schoolId, reportTarget: reportTarget, teachers: teachers, assignments: assignments, onOpenNotes: () => { setReportTarget(null); setActiveTab('notes'); } }),
+            _jsx(Suspense, { fallback: _jsx(SectionLoading, {}), children: _jsx(ClassReport, { schoolId: schoolId, classId: reportTarget.classId, teacherUid: reportTarget.teacherUid, assignmentId: reportTarget.assignmentId, className: reportTarget.className, subject: reportTarget.subject, teacherName: reportTarget.teacherName, defaultWeekId: reportTarget.weekId, defaultWeekName: reportTarget.weekName, onBack: () => setReportTarget(null) }) })
+        ] }));
     }
     const activeClasses = classes.filter((c) => !c.archived);
     const archivedClasses = classes.filter((c) => c.archived);
