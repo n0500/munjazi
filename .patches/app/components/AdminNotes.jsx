@@ -4,6 +4,7 @@ import { watchNotes, createNote, respondToNote, serverTimestamp } from '../lib/a
 import { noteWhatsAppUrl } from '../lib/noteWhatsApp.js';
 import { cachedContactNumbers, watchContactNumbers, saveContactNumber } from '../lib/adminContactsApi.js';
 import { colors, radius } from '../lib/theme.js';
+import { needsFollowUp, isFinished } from '../lib/noteStatus.js';
 
 const box = { padding: 16, border: `1px solid ${colors.border}`, borderRadius: radius.card, marginBottom: 12 };
 const field = { display: 'block', width: '100%', boxSizing: 'border-box', padding: 10, margin: '6px 0 12px', font: 'inherit' };
@@ -13,12 +14,6 @@ const errorText = err => err?.code === 'permission-denied'
   ? 'تعذّر الوصول إلى الملاحظات. يلزم تفعيل صلاحيات ملاحظات الإدارة في Firebase.'
   : (err?.message || 'تعذّر الاتصال أو حفظ التغيير. حاولي مرة أخرى.');
 
-export function needsFollowUp(note) {
-  return !note.readAt || (note.kind === 'action' && !note.completedAt);
-}
-export function isFinished(note) {
-  return note.kind === 'action' ? !!note.completedAt : !!note.readAt;
-}
 
 function NoteCard({ note, schoolId, isAdmin, savedPhone = '', onSavePhone, contactMode }) {
   const [reply, setReply] = useState(note.reply || '');
