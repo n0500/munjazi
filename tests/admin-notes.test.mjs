@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizePhone, noteWhatsAppUrl } from '../.patches/app/lib/noteWhatsApp.js';
+import { needsFollowUp, isFinished } from '../.patches/app/lib/noteStatus.js';
 test('Saudi, international and Arabic numerals normalize without losing country code', () => {
  for (const phone of ['0501234567','٠٥٠١٢٣٤٥٦٧','۰۵۰۱۲۳۴۵۶۷','+966 50 123 4567','00966501234567']) assert.equal(normalizePhone(phone), '966501234567');
  assert.equal(normalizePhone('+44 7700 900123'), '447700900123');
@@ -16,4 +17,18 @@ test('WhatsApp preserves Arabic note and sends teacher to notes, without inherit
  assert.ok(message.includes('يتطلب إجراء'));
  assert.ok(message.includes('https://n0500.github.io/munjazi/?role=teacher&notes=1'));
  assert.ok(!message.includes('role=parent'));
+});
+
+test('pending follow-up counts unread notices and unfinished action items', () => {
+ const cases = [
+  {note: {kind:'info',readAt:null,completedAt:null}, pending:true, done:false},
+  {note: {kind:'info',readAt:123,completedAt:null}, pending:false, done:true},
+  {note: {kind:'action',readAt:null,completedAt:null}, pending:true, done:false},
+  {note: {kind:'action',readAt:123,completedAt:null}, pending:true, done:false},
+  {note: {kind:'action',readAt:123,completedAt:124}, pending:false, done:true},
+ ];
+ for(const item of cases) {
+  assert.equal(needsFollowUp(item.note),item.pending);
+  assert.equal(isFinished(item.note),item.done);
+ }
 });
