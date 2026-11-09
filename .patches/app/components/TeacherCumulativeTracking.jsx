@@ -105,7 +105,7 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
     finally { setNoteBusy(false); }
   }
   const weekControl = (e) => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-    <button type="button" style={{ ...buttonStyle, border: 'none', textDecoration: 'underline', fontWeight: 700 }} onClick={() => open(e)} aria-label={'فتح تقرير ' + e.week.name}>{e.week.name}</button>
+    <button type="button" style={{ ...buttonStyle, border: 'none', textDecoration: 'underline', fontWeight: 700, color: e.week.type === 'remediation' ? '#98521b' : '#17618b', background: 'transparent', padding: '5px 2px' }} onClick={() => open(e)} aria-label={'فتح تقرير ' + e.week.name}>{e.week.name}</button>
     <button type="button" title="ملاحظة المديرة على هذا التقرير" aria-label={'ملاحظة على ' + e.week.name} onClick={() => noteTarget(e)} style={{ ...buttonStyle, padding: '5px 8px' }}>✎</button>
   </span>;
   return <section dir="rtl" style={{ border: '1px solid #dce5de', borderRadius: 12, padding: 16, marginBottom: 20 }}>
@@ -149,32 +149,47 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
         </div>)}
       </div>}
     </div>}
-    <div style={{ display: 'grid', gap: 12 }}>
-      {rows.map((row, i) => {
-        const m = row.measurement;
-        const ref = m || row.linked[0];
-        const treatments = row.linked.length ? row.linked : [null];
-        const metric = (label, value) => <div style={{ textAlign: 'center', flex: 1, minWidth: 0, background: '#f4f7f5', padding: '8px 3px', borderRadius: 7 }}>
-          <div style={{ fontSize: 11, color: colors.textMuted }}>{label}</div>
-          <strong style={{ display: 'block', fontSize: 18, marginTop: 4 }}>{value == null ? '—' : value + '%'}</strong>
+    <div style={{ display: 'grid', gap: 18 }}>
+      {Array.from(new Map(rows.map(row => {
+        const ref = row.measurement || row.linked[0];
+        return [ref.assignment.id || ref.assignment.classId + ':' + ref.assignment.subject, ref.assignment];
+      })).entries()).map(([assignmentKey, assignment]) => {
+        const classRows = rows.filter(row => {
+          const a = (row.measurement || row.linked[0]).assignment;
+          return (a.id || a.classId + ':' + a.subject) === assignmentKey;
+        });
+        const metric = (label, value, kind) => <div style={{ textAlign: 'center', flex: 1, minWidth: 0, background: kind === 'measurement' ? '#eaf3fa' : '#fff1e5', padding: '8px 3px', borderRadius: 7 }}>
+          <div style={{ fontSize: 11, color: kind === 'measurement' ? '#3a6581' : '#95602e' }}>{label}</div>
+          <strong style={{ display: 'block', fontSize: 18, marginTop: 4, color: '#20362c' }}>{value == null ? '—' : value + '%'}</strong>
         </div>;
-        const pane = (entry, kind, show) => <div style={{ flex: 1, minWidth: 0, padding: 10, background: kind === 'remediation' ? '#f7faf8' : '#fff', borderRadius: 8 }}>
+        const pane = (entry, kind, show) => <div style={{ flex: 1, minWidth: 0, padding: 9, background: kind === 'measurement' ? '#f4f9fd' : '#fff9f3', border: '1px solid ' + (kind === 'measurement' ? '#d4e7f5' : '#f3dfca'), borderRadius: 9 }}>
           {show && entry && <>
-            <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 5 }}>{kind === 'measurement' ? 'أسبوع القياس' : 'أسبوع المعالجة'}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: kind === 'measurement' ? '#17618b' : '#98521b', marginBottom: 5 }}>{kind === 'measurement' ? 'القياس' : 'المعالجة والمتابعة'}</div>
             {weekControl(entry)}
             <div style={{ display: 'flex', gap: 5, marginTop: 9 }}>
-              {metric(kind === 'measurement' ? 'اكتمال الرصد' : 'اكتمال المعالجة', entry.completion)}
-              {metric(kind === 'measurement' ? 'الإتقان' : 'الإتقان بعد المعالجة', entry.mastery)}
+              {metric(kind === 'measurement' ? 'اكتمال الرصد' : 'اكتمال المعالجة', entry.completion, kind)}
+              {metric(kind === 'measurement' ? 'الإتقان' : 'الإتقان بعد المعالجة', entry.mastery, kind)}
             </div>
           </>}
         </div>;
-        return <article key={(m?.week.id || 'unlinked') + i} style={{ border: '1px solid #dce5de', borderRadius: 12, padding: 10 }}>
-          <div style={{ fontWeight: 700, marginBottom: 9, fontSize: 13 }}>{ref.assignment.className || ref.assignment.classId} | {ref.assignment.subject || 'المادة'}</div>
-          {treatments.map((t, index) => <div key={t?.week.id || 'empty'} style={{ display: 'flex', gap: 7, alignItems: 'stretch', marginTop: index ? 7 : 0, borderTop: index ? '1px solid #e4ebe6' : 'none', paddingTop: index ? 7 : 0 }}>
-            {pane(m, 'measurement', index === 0)}
-            {pane(t, 'remediation', Boolean(t))}
-          </div>)}
-        </article>;
+        return <section key={assignmentKey} style={{ border: '1px solid #d6e2da', borderRadius: 12, overflow: 'hidden' }}>
+          <header style={{ background: '#e8f1eb', padding: '12px 14px', borderBottom: '1px solid #d6e2da', color: '#204e38', fontWeight: 700 }}>
+            {assignment.className || assignment.classId} <span style={{ color: '#658174', fontWeight: 400 }}> | {assignment.subject || 'المادة'}</span>
+            <span style={{ float: 'left', fontSize: 12, fontWeight: 400 }}>{classRows.length} قياس/سجل</span>
+          </header>
+          <div style={{ padding: 10, display: 'grid', gap: 10 }}>
+            {classRows.map((row, i) => {
+              const m = row.measurement;
+              const treatments = row.linked.length ? row.linked : [null];
+              return <article key={(m?.week.id || 'unlinked') + i} style={{ borderBottom: i < classRows.length - 1 ? '1px solid #e2e9e4' : 'none', paddingBottom: i < classRows.length - 1 ? 10 : 0 }}>
+                {treatments.map((t, index) => <div key={t?.week.id || 'empty'} style={{ display: 'flex', gap: 8, alignItems: 'stretch', marginTop: index ? 8 : 0 }}>
+                  {pane(m, 'measurement', index === 0)}
+                  {pane(t, 'remediation', Boolean(t))}
+                </div>)}
+              </article>;
+            })}
+          </div>
+        </section>;
       })}
     </div>
   </section>;
