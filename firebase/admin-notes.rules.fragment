@@ -1,42 +1,60 @@
-// Merge INSIDE match /databases/{database}/documents in the EXISTING rules.
-// Do not replace the existing rules. Audit overlapping recursive allow rules:
-// Firestore grants access if ANY matching allow rule permits it.
+// Add inside match /databases/{database}/documents, before its closing brace.
+// Uses the existing isAdminOf, isTeacherOf, userDoc and schoolIsActive helpers.
+// Model: immutable recipient, author, context, text, kind and creation time;
+// recipient can update only readAt, completedAt, reply and repliedAt.
 match /schools/{schoolId}/adminNotes/{noteId} {
-  function activeUser() {
-    return request.auth != null
-      && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled == false
-      && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
-  }
-  function admin() {
-    return activeUser() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+  function validNote(d) {
+    let fields = ['teacherUid', 'teacherName', 'assignmentId', 'context',
+      'kind', 'text', 'adminUid', 'adminName', 'createdAt',
+      'readAt', 'completedAt', 'reply', 'repliedAt'];
+    return d.keys().hasAll(fields) && d.keys().hasOnly(fields)
+      && d.teacherUid is string && d.teacherUid.size() > 0 && d.teacherUid.size() <= 128
+      && d.adminUid is string && d.adminUid.size() > 0 && d.adminUid.size() <= 128
+      && d.teacherName is string && d.teacherName.size() <= 200
+      && d.adminName is string && d.adminName.size() <= 200
+      && d.assignmentId is string && d.assignmentId.size() <= 200
+      && d.context is string && d.context.size() <= 600
+      && d.text is string && d.text.size() > 0 && d.text.size() <= 2000
+      && d.kind in ['info', 'action']
+      && d.createdAt is timestamp
+      && (d.readAt == null || d.readAt is timestamp)
+      && (d.completedAt == null || (d.kind == 'action' && d.completedAt is timestamp && d.readAt is timestamp))
+      && d.reply is string && d.reply.size() <= 2000
+      && ((d.reply == '' && d.repliedAt == null) || (d.reply.size() > 0 && d.repliedAt is timestamp && d.readAt is timestamp));
   }
   function recipient() {
-    return activeUser()
-      && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher'
-      && resource.data.teacherUid == request.auth.uid;
+    return isTeacherOf(schoolId) && resource.data.teacherUid == request.auth.uid;
   }
-  allow read: if admin() || recipient();
-  allow create: if admin()
-    && request.resource.data.keys().hasOnly(['teacherUid','teacherName','assignmentId','context','kind','text','adminUid','adminName','createdAt','readAt','completedAt','reply','repliedAt'])
-    && request.resource.data.teacherUid is string
-    && get(/databases/$(database)/documents/users/$(request.resource.data.teacherUid)).data.role == 'teacher'
-    && get(/databases/$(database)/documents/users/$(request.resource.data.teacherUid)).data.schoolId == schoolId
-    && get(/databases/$(database)/documents/users/$(request.resource.data.teacherUid)).data.disabled == false
+  function validRecipient(d) {
+    let teacher = get(/databases/$(database)/documents/users/$(d.teacherUid)).data;
+    return teacher.role == 'teacher' && teacher.schoolId == schoolId
+      && teacher.get('disabled', false) != true
+      && d.teacherName == teacher.get('displayName', 'المعلمة');
+  }
+  function validAssignment(d) {
+    return d.assignmentId == '' || (
+      get(/databases/$(database)/documents/schools/$(schoolId)/classTeacherAssignments/$(d.assignmentId)).data.teacherUid == d.teacherUid
+    );
+  }
+  allow read: if isAdminOf(schoolId) || recipient();
+  allow create: if isAdminOf(schoolId) && schoolIsActive(schoolId)
+    && validNote(request.resource.data)
+    && validRecipient(request.resource.data)
+    && validAssignment(request.resource.data)
     && request.resource.data.adminUid == request.auth.uid
-    && request.resource.data.adminName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
-    && request.resource.data.teacherName is string && request.resource.data.teacherName.size() <= 200
-    && request.resource.data.assignmentId is string && request.resource.data.assignmentId.size() <= 200
-    && request.resource.data.context is string && request.resource.data.context.size() <= 600
-    && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
-    && request.resource.data.kind in ['info','action']
+    && request.resource.data.adminName == userDoc().data.get('displayName', 'إدارة المدرسة')
     && request.resource.data.createdAt == request.time
-    && request.resource.data.readAt == null && request.resource.data.completedAt == null
-    && request.resource.data.reply == '' && request.resource.data.repliedAt == null;
-  allow update: if recipient()
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt','completedAt','reply','repliedAt'])
-    && (request.resource.data.readAt == resource.data.readAt || (resource.data.readAt == null && request.resource.data.readAt == request.time))
-    && (request.resource.data.completedAt == resource.data.completedAt || (resource.data.completedAt == null && resource.data.kind == 'action' && request.resource.data.completedAt == request.time))
-    && request.resource.data.reply is string && request.resource.data.reply.size() <= 2000
+    && request.resource.data.readAt == null
+    && request.resource.data.completedAt == null
+    && request.resource.data.reply == ''
+    && request.resource.data.repliedAt == null;
+  allow update: if recipient() && validNote(request.resource.data)
+    && request.resource.data.diff(resource.data).affectedKeys()
+      .hasOnly(['readAt', 'completedAt', 'reply', 'repliedAt'])
+    && (request.resource.data.readAt == resource.data.readAt
+      || (resource.data.readAt == null && request.resource.data.readAt == request.time))
+    && (request.resource.data.completedAt == resource.data.completedAt
+      || (resource.data.completedAt == null && request.resource.data.completedAt == request.time))
     && ((request.resource.data.reply == resource.data.reply && request.resource.data.repliedAt == resource.data.repliedAt)
       || (request.resource.data.reply.size() > 0 && request.resource.data.repliedAt == request.time));
   allow delete: if false;
