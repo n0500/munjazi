@@ -94,6 +94,9 @@ jobs:
       - name: Verify week copy behavior
         run: node --experimental-vm-modules --test tests/week-copy.test.mjs
 
+      - name: Verify admin notes, WhatsApp and follow-up queue
+        run: node --test tests/admin-notes.test.mjs
+
       - name: Install dependencies
         working-directory: .deploy-app
         run: npm install
