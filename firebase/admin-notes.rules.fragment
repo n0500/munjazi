@@ -1,0 +1,43 @@
+// Merge INSIDE match /databases/{database}/documents in the EXISTING rules.
+// Do not replace the existing rules. Audit overlapping recursive allow rules:
+// Firestore grants access if ANY matching allow rule permits it.
+match /schools/{schoolId}/adminNotes/{noteId} {
+  function activeUser() {
+    return request.auth != null
+      && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled == false
+      && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
+  }
+  function admin() {
+    return activeUser() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+  }
+  function recipient() {
+    return activeUser()
+      && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher'
+      && resource.data.teacherUid == request.auth.uid;
+  }
+  allow read: if admin() || recipient();
+  allow create: if admin()
+    && request.resource.data.keys().hasOnly(['teacherUid','teacherName','assignmentId','context','kind','text','adminUid','adminName','createdAt','readAt','completedAt','reply','repliedAt'])
+    && request.resource.data.teacherUid is string
+    && get(/databases/$(database)/documents/users/$(request.resource.data.teacherUid)).data.role == 'teacher'
+    && get(/databases/$(database)/documents/users/$(request.resource.data.teacherUid)).data.schoolId == schoolId
+    && get(/databases/$(database)/documents/users/$(request.resource.data.teacherUid)).data.disabled == false
+    && request.resource.data.adminUid == request.auth.uid
+    && request.resource.data.adminName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
+    && request.resource.data.teacherName is string && request.resource.data.teacherName.size() <= 200
+    && request.resource.data.assignmentId is string && request.resource.data.assignmentId.size() <= 200
+    && request.resource.data.context is string && request.resource.data.context.size() <= 600
+    && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+    && request.resource.data.kind in ['info','action']
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.readAt == null && request.resource.data.completedAt == null
+    && request.resource.data.reply == '' && request.resource.data.repliedAt == null;
+  allow update: if recipient()
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt','completedAt','reply','repliedAt'])
+    && (request.resource.data.readAt == resource.data.readAt || (resource.data.readAt == null && request.resource.data.readAt == request.time))
+    && (request.resource.data.completedAt == resource.data.completedAt || (resource.data.completedAt == null && resource.data.kind == 'action' && request.resource.data.completedAt == request.time))
+    && request.resource.data.reply is string && request.resource.data.reply.size() <= 2000
+    && ((request.resource.data.reply == resource.data.reply && request.resource.data.repliedAt == resource.data.repliedAt)
+      || (request.resource.data.reply.size() > 0 && request.resource.data.repliedAt == request.time));
+  allow delete: if false;
+}
