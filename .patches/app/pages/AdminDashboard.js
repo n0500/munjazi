@@ -1,3 +1,4 @@
+import DirectWeekReport from './DirectWeekReport.jsx';
 import TeacherCumulativeTracking from '../components/TeacherCumulativeTracking.jsx';
 import AdminNotes from '../components/AdminNotes.jsx';
 import ReportNoteComposer from '../components/ReportNoteComposer.jsx';
@@ -486,6 +487,7 @@ export default function AdminDashboard({ schoolId }) {
     if (selectedClassId) {
         return _jsx(ClassDetail, { schoolId: schoolId, classId: selectedClassId, allClasses: classes, onBack: () => { setSelectedClassId(null); refresh(); } });
     }
+    if (reportTarget && activeTab === 'trackingPreview') return _jsx(DirectWeekReport, { schoolId: schoolId, target: reportTarget, onBack: () => setReportTarget(null) });
     if (reportTarget) {
         return (_jsxs(_Fragment, { children: [
             activeTab !== 'trackingPreview' && _jsx(ReportNoteComposer, { schoolId: schoolId, reportTarget: reportTarget, teachers: teachers, assignments: assignments, onOpenNotes: () => { setReportTarget(null); setActiveTab('notes'); } }),
