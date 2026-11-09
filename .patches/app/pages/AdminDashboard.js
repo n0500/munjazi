@@ -25,7 +25,7 @@ const TABS = [
     { key: 'teachers', label: 'المعلمات' },
     { key: 'notes', label: 'ملاحظات الإدارة' },
     { key: 'tracking', label: 'متابعة الرصد' },
-    { key: 'trackingPreview', label: 'تجربة المتابعة' },
+    { key: 'trackingPreview', label: 'متابعة المعلمات' },
     { key: 'impact', label: 'الأثر العام' },
     { key: 'pendingAck', label: 'اطلاع أولياء الأمور' },
     { key: 'safety', label: 'النسخ والسلامة' },
