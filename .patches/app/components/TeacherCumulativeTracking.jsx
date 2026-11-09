@@ -82,7 +82,7 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
   const open = (e) => onReport({
     classId: e.assignment.classId, teacherUid: e.assignment.teacherUid, assignmentId: e.assignment.id,
     className: e.assignment.className || '', teacherName: e.assignment.teacherName || '',
-    subject: e.assignment.subject || '', weekId: e.week.id, weekName: e.week.name,
+    subject: e.assignment.subject || '', weekId: e.week.id, weekName: e.week.name, weekType: e.week.type,
   });
   const noteTarget = (e) => {
     setNoteEntry(e); setNoteText(''); setNoteKind('action'); setNoteError(''); setNoteSuccess(''); setPriorNotes([]);
