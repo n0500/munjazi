@@ -349,7 +349,11 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
               {sourceWeeks.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
             <small>يُتحقق من النتائج المسجلة بعد إرسال الملاحظة، دون اعتماد يدوي.</small>
-          </label> : formWeek}
+          </label> : <label>الأسبوع أو الفترة (اختياري)
+            <input style={field} value={week} maxLength={200}
+              placeholder="مثال: الأسبوع الثاني عشر"
+              onChange={e => setWeek(e.target.value)} />
+          </label>}
           <label>نوع الملاحظة<select style={field} value={kind} onChange={e => setKind(e.target.value)}>
             <option value="info">للاطلاع</option><option value="action">يتطلب إجراء</option>
           </select></label>

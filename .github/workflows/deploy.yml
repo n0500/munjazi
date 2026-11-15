@@ -101,6 +101,9 @@ jobs:
         working-directory: .deploy-app
         run: npm install
 
+      - name: Verify admin and teacher notes rendering
+        run: node --test tests/admin-notes-render.test.mjs
+
       - name: Verify all-classes PDF export
         run: node --test tests/all-classes-pdf.test.mjs
 
