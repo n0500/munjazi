@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { watchNotes, createNote, respondToNote, serverTimestamp } from '../lib/adminNotesApi.js';
 import { noteWhatsAppUrl } from '../lib/noteWhatsApp.js';
@@ -12,6 +12,17 @@ const box = { padding: 16, border: `1px solid ${colors.border}`, borderRadius: r
 const field = { display: 'block', width: '100%', boxSizing: 'border-box', padding: 10, margin: '6px 0 12px', font: 'inherit' };
 const button = { padding: '9px 14px', borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.primary, color: '#fff', cursor: 'pointer' };
 const secondary = { ...button, background: '#f5f5f5', color: colors.ink };
+// Completed automatic checks are cached on the device so they are not re-read from Firestore on every visit.
+const AUTO_CACHE = schoolId => 'munjazi:autoNotes:' + schoolId;
+function readAutoCache(schoolId) {
+  try { return JSON.parse(localStorage.getItem(AUTO_CACHE(schoolId)) || '{}') || {}; } catch { return {}; }
+}
+function writeAutoCache(schoolId, cache) {
+  try { localStorage.setItem(AUTO_CACHE(schoolId), JSON.stringify(cache)); } catch { /* storage unavailable */ }
+}
+const AUTO_REFRESH_MIN_MS = 10 * 60 * 1000;
+// For the teacher, a note that cannot be verified automatically is not her fault and must not raise a red alert.
+const teacherAttention = note => needsFollowUp(note) && note.autoState !== 'unverified';
 const errorText = err => err?.code === 'permission-denied'
   ? 'تعذّر الوصول إلى الملاحظات. يلزم تفعيل صلاحيات ملاحظات الإدارة في Firebase.'
   : (err?.message || 'تعذّر الاتصال أو حفظ التغيير. حاولي مرة أخرى.');
@@ -50,7 +61,7 @@ function NoteCard({ note, schoolId, isAdmin, savedPhone = '', onSavePhone, conta
   const auto = note.autoResult;
   const status = tracked ? (auto?.state === 'complete' ? 'تم التنفيذ وفق بيانات منجزي' : auto?.state === 'progress' ? 'جارٍ التنفيذ' : auto?.state === 'unverified' ? 'تعذّر التحقق آليًا' : 'بانتظار التنفيذ')
     : note.completedAt ? 'أفادت المعلمة بإتمام الإجراء' : !note.readAt ? 'لم يُطّلع عليها' : note.kind === 'action' ? 'بانتظار الإجراء' : 'تم الاطلاع';
-  const attention = !isAdmin && needsFollowUp(note);
+  const attention = !isAdmin && teacherAttention(note);
   const unread = !isAdmin && !note.readAt;
   return <article style={{ ...box, borderColor: attention ? '#d77a74' : unread ? '#d9ac5c' : colors.border, borderRight: attention ? '4px solid #b9433b' : unread ? '4px solid #c18a32' : undefined, background: attention ? '#fff8f7' : unread ? '#fffbf3' : '#fff' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
@@ -150,27 +161,49 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
     setLoading(true); setError(''); setNotes([]);
     return watchNotes(schoolId, isAdmin ? null : profile.uid, rows => { setNotes(rows); setLoading(false); }, e => { setError(errorText(e)); setLoading(false); });
   }, [schoolId, profile.uid, isAdmin]);
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+  const forceRef = useRef(false);
+  const lastCheckRef = useRef(0);
+  // Re-check only when tracked notes are added, not on every read or reply.
+  const trackedKey = notes.filter(n => n.kind === 'action' && readAutoContext(n.context))
+    .map(n => n.id + ':' + (n.createdAt?.seconds || 0)).join('|');
   useEffect(() => {
-    const refresh = () => setRefreshTick(t => t + 1);
-    const visibility = () => { if (document.visibilityState === 'visible') refresh(); };
-    window.addEventListener('focus', refresh);
+    // Returning to the page refreshes at most once every ten minutes; no periodic polling.
+    const visibility = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastCheckRef.current > AUTO_REFRESH_MIN_MS) setRefreshTick(t => t + 1);
+    };
     document.addEventListener('visibilitychange', visibility);
-    const timer = setInterval(refresh, 120000);
-    return () => { window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visibility); clearInterval(timer); };
+    return () => document.removeEventListener('visibilitychange', visibility);
   }, []);
   useEffect(() => {
     let active = true;
-    if (!notes.some(n => n.kind === 'action' && readAutoContext(n.context))) {
+    const tracked = notesRef.current.filter(n => n.kind === 'action' && readAutoContext(n.context));
+    if (!tracked.length) {
       setAutoStatuses({}); setAutoChecking(false); setAutoError('');
       return () => { active = false; };
     }
+    const force = forceRef.current;
+    forceRef.current = false;
+    const cache = force ? {} : readAutoCache(schoolId);
+    const cached = {};
+    tracked.forEach(n => { if (cache[n.id]?.state === 'complete') cached[n.id] = cache[n.id]; });
+    const toCheck = tracked.filter(n => !cached[n.id]);
+    setAutoStatuses(prev => ({ ...prev, ...cached }));
+    if (!toCheck.length) { setAutoChecking(false); return () => { active = false; }; }
     setAutoChecking(true); setAutoError('');
-    loadAutoNoteStatuses(schoolId, notes).then(results => {
-      if (active) setAutoStatuses(results);
+    lastCheckRef.current = Date.now();
+    loadAutoNoteStatuses(schoolId, toCheck).then(results => {
+      if (!active) return;
+      const all = { ...cached, ...results };
+      setAutoStatuses(all);
+      const nextCache = {};
+      tracked.forEach(n => { if (all[n.id]?.state === 'complete') nextCache[n.id] = all[n.id]; });
+      writeAutoCache(schoolId, nextCache);
     }).catch(err => { if (active) setAutoError(err.message || 'تعذّر تحديث حالات المتابعة الآلية.'); })
       .finally(() => { if (active) setAutoChecking(false); });
     return () => { active = false; };
-  }, [schoolId, notes, refreshTick]);
+  }, [schoolId, trackedKey, refreshTick]);
   useEffect(() => {
     let active = true;
     setSourceWeeks([]); setSourceWeekId('');
@@ -181,7 +214,7 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
       .then(weeks => { if (active) setSourceWeeks(weeks.filter(w => w.type === 'measurement')); })
       .catch(() => { if (active) setSourceWeeks([]); });
     return () => { active = false; };
-  }, [schoolId, isAdmin, assignmentId, teacherUid]);
+  }, [schoolId, isAdmin, assignmentId, teacherUid, assignments]);
     useEffect(() => {
     if (!isAdmin) return undefined;
     return watchContactNumbers(schoolId, setContacts, setContactMode);
@@ -218,10 +251,11 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
       const teacher = teachers.find(t => t.uid === teacherUid);
       if (!teacher || teacher.disabled) throw new Error('اختاري معلمة نشطة.');
       const assignment = assignments.find(a => a.id === assignmentId && a.teacherUid === teacherUid);
-      if (autoType && (!assignment || !sourceWeekId)) throw new Error('اختاري الفصل وأسبوع القياس قبل تفعيل المتابعة الآلية.');
-      const baseContext = [assignment ? `${classes.find(c => c.id === assignment.classId)?.name || ''} — ${assignment.subject || ''}` : '', autoType ? sourceWeeks.find(w => w.id === sourceWeekId)?.name || '' : week.trim()]
+      const useAuto = kind === 'action' && !!autoType;
+      if (useAuto && (!assignment || !sourceWeekId)) throw new Error('اختاري الفصل وأسبوع القياس قبل تفعيل المتابعة الآلية.');
+      const baseContext = [assignment ? `${classes.find(c => c.id === assignment.classId)?.name || ''} — ${assignment.subject || ''}` : '', useAuto ? sourceWeeks.find(w => w.id === sourceWeekId)?.name || '' : String(week || '').trim()]
         .filter(Boolean).join(' · ');
-      const context = autoType && kind === 'action' ? encodeAutoContext(baseContext, autoType, sourceWeekId) : baseContext.slice(0, 600);
+      const context = useAuto ? encodeAutoContext(baseContext, autoType, sourceWeekId) : baseContext.slice(0, 600);
       await createNote(schoolId, profile, {
         teacherUid, teacherName: teacher.displayName || 'المعلمة',
         assignmentId: assignment?.id || '', context, kind, text: noteText.trim(),
@@ -234,7 +268,7 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
 
   const enriched = notes.map(n => ({ ...n, autoResult: autoStatuses[n.id], autoState: autoStatuses[n.id]?.state }));
   const unread = enriched.filter(n => !n.readAt).length;
-  const urgentCount = enriched.filter(n => n.kind === 'action' && needsFollowUp(n)).length;
+  const urgentCount = enriched.filter(n => n.kind === 'action' && (isAdmin ? needsFollowUp(n) : teacherAttention(n))).length;
   const infoUnread = enriched.filter(n => n.kind === 'info' && !n.readAt).length;
   const pendingCount = enriched.filter(needsFollowUp).length;
   const completedCount = enriched.filter(isFinished).length;
@@ -282,7 +316,7 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
         </label>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button type="button" style={secondary} disabled={autoChecking} onClick={() => setRefreshTick(t => t + 1)}>{autoChecking ? 'جارٍ التحقق…' : 'تحديث الحالات من الرصد'}</button>
+        <button type="button" style={secondary} disabled={autoChecking} onClick={() => { forceRef.current = true; setRefreshTick(t => t + 1); }}>{autoChecking ? 'جارٍ التحقق…' : 'تحديث الحالات من الرصد'}</button>
         <button type="button" style={button} onClick={printReport}>طباعة التقرير / حفظ PDF</button>
       </div>
       {autoError && <p role="alert" style={{ color: colors.red }}>{autoError}</p>}
@@ -330,6 +364,9 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
             <option value="">اختاري المعلمة</option>
             {teachers.filter(t => !t.disabled).map(t => <option key={t.uid} value={t.uid}>{t.displayName}</option>)}
           </select></label>
+          <label>نوع الملاحظة<select style={field} value={kind} onChange={e => { setKind(e.target.value); setAutoType(''); setSourceWeekId(''); }}>
+            <option value="info">للاطلاع</option><option value="action">يتطلب إجراء</option>
+          </select></label>
           <label>الفصل والمادة (اختياري)<select style={field} value={assignmentId} onChange={e => setAssignmentId(e.target.value)}>
             <option value="">ملاحظة عامة</option>
             {assignments.filter(a => a.teacherUid === teacherUid).map(a =>
@@ -339,8 +376,7 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
             <select style={field} value={autoType} onChange={e => { setAutoType(e.target.value); setSourceWeekId(''); }}>
               <option value="">متابعة يدوية (ملاحظة عامة)</option>
               <option value="completion">تلقائي — استكمال الرصد</option>
-              <option value="remediation">تلقائي — تنفيذ المعالجة</option>
-              <option value="reassessment">تلقائي — إعادة القياس</option>
+              <option value="remediation">تلقائي — تنفيذ المعالجة وإعادة القياس</option>
             </select>
           </label>}
           {kind === 'action' && autoType ? <label>أسبوع القياس المرتبط
@@ -354,9 +390,6 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
               placeholder="مثال: الأسبوع الثاني عشر"
               onChange={e => setWeek(e.target.value)} />
           </label>}
-          <label>نوع الملاحظة<select style={field} value={kind} onChange={e => setKind(e.target.value)}>
-            <option value="info">للاطلاع</option><option value="action">يتطلب إجراء</option>
-          </select></label>
           <label>الملاحظة<textarea style={field} required rows={4} maxLength={2000} value={noteText} onChange={e => setNoteText(e.target.value)} /></label>
           <button type="submit" style={button} disabled={busy || !noteText.trim() || !teacherUid || (kind === 'action' && !!autoType && !sourceWeekId)}>
             {busy ? 'جارٍ الحفظ…' : 'حفظ وإشعار المعلمة داخل منجزي'}

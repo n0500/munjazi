@@ -1,3 +1,5 @@
+// Internal tracking code must never reach the WhatsApp text (kept local to avoid loading Firebase here).
+const visibleNoteContext = (context) => String(context || '').replace(/\s*\[MONJAZI_AUTO:[^\]]*\]\s*$/, '').trim();
 export function normalizePhone(value) {
   let number = String(value || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[\s()+-]/g, '');
   if (number.startsWith('00')) number = number.slice(2);
@@ -10,6 +12,7 @@ export function noteWhatsAppUrl(phone, note, baseUrl) {
   const url = new URL(baseUrl);
   url.search = ''; url.hash = '';
   url.searchParams.set('role', 'teacher'); url.searchParams.set('notes', '1');
-  const text = `أ. ${note.teacherName}\nلديك ملاحظة من ${note.adminName || 'إدارة المدرسة'} في منجزي.\n${note.context ? `${note.context}\n` : ''}${note.kind === 'action' ? 'يتطلب إجراء' : 'للاطلاع'}\n${note.text}\nللاطلاع والرد: ${url.href}`;
+  const context = visibleNoteContext(note.context);
+  const text = `أ. ${note.teacherName}\nلديك ملاحظة من ${note.adminName || 'إدارة المدرسة'} في منجزي.\n${context ? `${context}\n` : ''}${note.kind === 'action' ? 'يتطلب إجراء' : 'للاطلاع'}\n${note.text}\nللاطلاع والرد: ${url.href}`;
   return `https://wa.me/${normalizePhone(phone)}?text=${encodeURIComponent(text)}`;
 }

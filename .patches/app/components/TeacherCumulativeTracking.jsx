@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { listWeeksForClass } from '../lib/weeksApi.js';
 import { listSkillsForWeek } from '../lib/skillsApi.js';
-import { listAssessmentsForSkill } from '../lib/assessmentsApi.js';
+import { listAssessmentsForWeek } from '../lib/assessmentsApi.js';
 import { listClassStudents } from '../lib/studentsApi.js';
 import { colors } from '../lib/theme.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -19,8 +19,9 @@ async function loadTeacherHistory(schoolId, assignments) {
       listClassStudents(schoolId, a.classId),
     ]);
     const entries = await Promise.all(weeks.map(async (week) => {
-      const skills = await listSkillsForWeek(schoolId, week.id);
-      const assessments = await Promise.all(skills.map((skill) => listAssessmentsForSkill(schoolId, skill.id)));
+      // One query per week instead of one per skill (fewer Firestore reads).
+      const [skills, bySkill] = await Promise.all([listSkillsForWeek(schoolId, week.id), listAssessmentsForWeek(schoolId, week.id)]);
+      const assessments = skills.map((skill) => bySkill[skill.id] || {});
       const recorded = assessments.reduce((n, map) => n + students.filter((student) => Boolean(map[student.id]?.status)).length, 0);
       const total = students.length * skills.length;
       const mastered = assessments.reduce((n, map) => n + students.filter((student) => map[student.id]?.status === 'mastered').length, 0);
@@ -242,9 +243,11 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
           <select value={autoType} onChange={e => setAutoType(e.target.value)} style={{ display: 'block', width: '100%', padding: 9, marginTop: 4 }}>
             <option value="">تأكيد يدوي (ملاحظة عامة)</option>
             <option value="completion">تلقائي — استكمال الرصد</option>
-            {noteEntry.week.type === 'measurement' && <option value="remediation">تلقائي — تنفيذ المعالجة</option>}
-            {noteEntry.week.type === 'measurement' && <option value="reassessment">تلقائي — إعادة القياس</option>}
+            {noteEntry.week.type === 'measurement' && <option value="remediation">تلقائي — تنفيذ المعالجة وإعادة القياس</option>}
           </select>
+          {autoType === 'completion' && noteEntry.completion === 100 && <small style={{ display: 'block', marginTop: 5, color: '#955319' }}>
+            رصد هذا الأسبوع مكتمل بالفعل؛ لن تتغير حالة المتابعة إلا إذا عدّلت المعلمة الرصد بعد إرسال الملاحظة.
+          </small>}
         </label>}
                 <label style={{ display: 'block' }}>ملاحظة الإدارة
           <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={3} maxLength={2000} required style={{ display: 'block', width: '100%', boxSizing: 'border-box', padding: 10, marginTop: 5, font: 'inherit' }} />

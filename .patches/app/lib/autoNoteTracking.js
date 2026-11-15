@@ -7,7 +7,7 @@ import { listClassStudents } from './studentsApi.js';
 const TOKEN = /\s*\[MONJAZI_AUTO:(completion|remediation|reassessment):([a-zA-Z0-9_-]{1,120})\]\s*$/;
 export const AUTO_ACTIONS = {
   completion: 'استكمال الرصد',
-  remediation: 'تنفيذ المعالجة',
+  remediation: 'تنفيذ المعالجة وإعادة القياس',
   reassessment: 'إعادة القياس',
 };
 export function encodeAutoContext(context, action, sourceWeekId) {
