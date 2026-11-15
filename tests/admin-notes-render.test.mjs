@@ -28,8 +28,9 @@ for (const [label, isAdmin, search] of [['admin', true, ''], ['teacher', false, 
     const html = renderToStaticMarkup(React.createElement(AdminNotes, { schoolId: 'test-school', isAdmin }));
     assert.match(html, /ملاحظات الإدارة/);
     if (isAdmin) {
-      assert.match(html, /الأسبوع أو الفترة/);
-      assert.match(html, /حفظ وإشعار المعلمة/);
+      // Notes are created only from measurement/remediation follow-up, not from a general form.
+      assert.match(html, /متابعة المعلمات/);
+      assert.doesNotMatch(html, /حفظ وإشعار المعلمة/);
     }
     if (search) assert.match(html, /جميع الملاحظات/);
   });
