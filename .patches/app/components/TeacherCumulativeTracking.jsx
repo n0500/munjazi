@@ -241,7 +241,7 @@ export default function TeacherCumulativeTracking({ schoolId, assignments, teach
         </label>
         {noteKind === 'action' && <label style={{ display: 'block', marginBottom: 9 }}>متابعة التنفيذ
           <select value={autoType} onChange={e => setAutoType(e.target.value)} style={{ display: 'block', width: '100%', padding: 9, marginTop: 4 }}>
-            <option value="">تأكيد يدوي (ملاحظة عامة)</option>
+            <option value="">متابعة يدوية (تؤكدها المعلمة)</option>
             <option value="completion">تلقائي — استكمال الرصد</option>
             {noteEntry.week.type === 'measurement' && <option value="remediation">تلقائي — تنفيذ المعالجة وإعادة القياس</option>}
           </select>

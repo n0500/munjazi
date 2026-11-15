@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
-import { watchNotes, createNote, respondToNote, serverTimestamp } from '../lib/adminNotesApi.js';
+import { watchNotes, respondToNote, serverTimestamp } from '../lib/adminNotesApi.js';
 import { noteWhatsAppUrl } from '../lib/noteWhatsApp.js';
 import { cachedContactNumbers, watchContactNumbers, saveContactNumber } from '../lib/adminContactsApi.js';
 import { colors, radius } from '../lib/theme.js';
 import { needsFollowUp, isFinished } from '../lib/noteStatus.js';
-import { loadAutoNoteStatuses, readAutoContext, visibleNoteContext, AUTO_ACTIONS, encodeAutoContext } from '../lib/autoNoteTracking.js';
-import { listWeeksForClass } from '../lib/weeksApi.js';
+import { loadAutoNoteStatuses, readAutoContext, visibleNoteContext, AUTO_ACTIONS } from '../lib/autoNoteTracking.js';
 
 const box = { padding: 16, border: `1px solid ${colors.border}`, borderRadius: radius.card, marginBottom: 12 };
 const field = { display: 'block', width: '100%', boxSizing: 'border-box', padding: 10, margin: '6px 0 12px', font: 'inherit' };
@@ -31,7 +30,6 @@ const errorText = err => err?.code === 'permission-denied'
 function NoteCard({ note, schoolId, isAdmin, savedPhone = '', onSavePhone, contactMode, onOpenReport }) {
   const [reply, setReply] = useState(note.reply || '');
   const [phone, setPhone] = useState(savedPhone);
-  const [busy, setBusy] = useState(false);
   const [savingPhone, setSavingPhone] = useState(false);
   const [phoneNotice, setPhoneNotice] = useState('');
   const [error, setError] = useState('');
@@ -135,20 +133,10 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
   const [refreshTick, setRefreshTick] = useState(0);
   const [reportTeacher, setReportTeacher] = useState('');
   const [reportState, setReportState] = useState('all');
-  const [autoType, setAutoType] = useState('');
-  const [sourceWeekId, setSourceWeekId] = useState('');
-  const [sourceWeeks, setSourceWeeks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(isAdmin || new URLSearchParams(window.location.search).get('notes') === '1');
   const [filter, setFilter] = useState(isAdmin ? 'pending' : 'all');
-  const [teacherUid, setTeacherUid] = useState('');
-  const [assignmentId, setAssignmentId] = useState('');
-  const [week, setWeek] = useState('');
-  const [kind, setKind] = useState('info');
-  const [noteText, setNoteText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [success, setSuccess] = useState('');
 
   const [contacts, setContacts] = useState(() => isAdmin ? cachedContactNumbers(schoolId) : {});
   const [contactMode, setContactMode] = useState('loading');
@@ -204,17 +192,6 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
       .finally(() => { if (active) setAutoChecking(false); });
     return () => { active = false; };
   }, [schoolId, trackedKey, refreshTick]);
-  useEffect(() => {
-    let active = true;
-    setSourceWeeks([]); setSourceWeekId('');
-    if (!isAdmin || !assignmentId) return () => { active = false; };
-    const assignment = assignments.find(a => a.id === assignmentId && a.teacherUid === teacherUid);
-    if (!assignment) return () => { active = false; };
-    listWeeksForClass(schoolId, assignment.classId, teacherUid, assignment.id)
-      .then(weeks => { if (active) setSourceWeeks(weeks.filter(w => w.type === 'measurement')); })
-      .catch(() => { if (active) setSourceWeeks([]); });
-    return () => { active = false; };
-  }, [schoolId, isAdmin, assignmentId, teacherUid, assignments]);
     useEffect(() => {
     if (!isAdmin) return undefined;
     return watchContactNumbers(schoolId, setContacts, setContactMode);
@@ -243,29 +220,6 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
     } catch (e) { setContactMessage(e.message || 'تعذّر حفظ الرقم.'); }
     finally { setContactSaving(false); }
   }
-  async function save(e) {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true); setError(''); setSuccess('');
-    try {
-      const teacher = teachers.find(t => t.uid === teacherUid);
-      if (!teacher || teacher.disabled) throw new Error('اختاري معلمة نشطة.');
-      const assignment = assignments.find(a => a.id === assignmentId && a.teacherUid === teacherUid);
-      const useAuto = kind === 'action' && !!autoType;
-      if (useAuto && (!assignment || !sourceWeekId)) throw new Error('اختاري الفصل وأسبوع القياس قبل تفعيل المتابعة الآلية.');
-      const baseContext = [assignment ? `${classes.find(c => c.id === assignment.classId)?.name || ''} — ${assignment.subject || ''}` : '', useAuto ? sourceWeeks.find(w => w.id === sourceWeekId)?.name || '' : String(week || '').trim()]
-        .filter(Boolean).join(' · ');
-      const context = useAuto ? encodeAutoContext(baseContext, autoType, sourceWeekId) : baseContext.slice(0, 600);
-      await createNote(schoolId, profile, {
-        teacherUid, teacherName: teacher.displayName || 'المعلمة',
-        assignmentId: assignment?.id || '', context, kind, text: noteText.trim(),
-      });
-      setNoteText(''); setFilter('pending'); setAutoType(''); setSourceWeekId('');
-      setSuccess('تم حفظ الملاحظة. ستظهر للمعلمة، ويمكنك تجهيز رسالة واتساب من البطاقة أدناه.');
-    } catch (e) { setError(errorText(e)); }
-    finally { setBusy(false); }
-  }
-
   const enriched = notes.map(n => ({ ...n, autoResult: autoStatuses[n.id], autoState: autoStatuses[n.id]?.state }));
   const unread = enriched.filter(n => !n.readAt).length;
   const urgentCount = enriched.filter(n => n.kind === 'action' && (isAdmin ? needsFollowUp(n) : teacherAttention(n))).length;
@@ -357,47 +311,11 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
               'الأرقام المحلية متاحة، لكن المزامنة غير مفعّلة. يلزم نشر قواعد أرقام التواصل في Firebase.'}
           </p>
         </details>
-        <form onSubmit={save} style={box}>
-          <h3>إضافة ملاحظة للمعلمة</h3>
-          <label>المعلمة<select style={field} required value={teacherUid}
-            onChange={e => { setTeacherUid(e.target.value); setAssignmentId(''); }}>
-            <option value="">اختاري المعلمة</option>
-            {teachers.filter(t => !t.disabled).map(t => <option key={t.uid} value={t.uid}>{t.displayName}</option>)}
-          </select></label>
-          <label>نوع الملاحظة<select style={field} value={kind} onChange={e => { setKind(e.target.value); setAutoType(''); setSourceWeekId(''); }}>
-            <option value="info">للاطلاع</option><option value="action">يتطلب إجراء</option>
-          </select></label>
-          <label>الفصل والمادة (اختياري)<select style={field} value={assignmentId} onChange={e => setAssignmentId(e.target.value)}>
-            <option value="">ملاحظة عامة</option>
-            {assignments.filter(a => a.teacherUid === teacherUid).map(a =>
-              <option key={a.id} value={a.id}>{classes.find(c => c.id === a.classId)?.name} — {a.subject}</option>)}
-          </select></label>
-          {kind === 'action' && <label>طريقة متابعة التنفيذ
-            <select style={field} value={autoType} onChange={e => { setAutoType(e.target.value); setSourceWeekId(''); }}>
-              <option value="">متابعة يدوية (ملاحظة عامة)</option>
-              <option value="completion">تلقائي — استكمال الرصد</option>
-              <option value="remediation">تلقائي — تنفيذ المعالجة وإعادة القياس</option>
-            </select>
-          </label>}
-          {kind === 'action' && autoType ? <label>أسبوع القياس المرتبط
-            <select required style={field} value={sourceWeekId} onChange={e => setSourceWeekId(e.target.value)}>
-              <option value="">اختاري التقرير الأصلي</option>
-              {sourceWeeks.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-            <small>يُتحقق من النتائج المسجلة بعد إرسال الملاحظة، دون اعتماد يدوي.</small>
-          </label> : <label>الأسبوع أو الفترة (اختياري)
-            <input style={field} value={week} maxLength={200}
-              placeholder="مثال: الأسبوع الثاني عشر"
-              onChange={e => setWeek(e.target.value)} />
-          </label>}
-          <label>الملاحظة<textarea style={field} required rows={4} maxLength={2000} value={noteText} onChange={e => setNoteText(e.target.value)} /></label>
-          <button type="submit" style={button} disabled={busy || !noteText.trim() || !teacherUid || (kind === 'action' && !!autoType && !sourceWeekId)}>
-            {busy ? 'جارٍ الحفظ…' : 'حفظ وإشعار المعلمة داخل منجزي'}
-          </button>
-        </form>
+        <p style={{ ...box, background: '#f7faf8', fontSize: 13, margin: '0 0 12px' }}>
+          تُضاف الملاحظات من تبويب «متابعة المعلمات» على تقرير قياس أو معالجة محدد، لتبقى كل ملاحظة مرتبطة بشاهدها.
+        </p>
       </>}
       {error && <p role="alert" style={{ color: colors.red }}>{error}</p>}
-      {success && <p role="status" style={{ color: '#0b5c33' }}>{success}</p>}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
         <button type="button" style={filter === 'pending' ? button : secondary} onClick={() => setFilter('pending')}>
           بانتظار المتابعة ({pendingCount})
@@ -411,7 +329,7 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
       </div>
       {loading ? <p>جارٍ تحميل الملاحظات…</p> : !error && shown.length === 0
         ? <p>{filter === 'pending' ? 'لا توجد ملاحظات بانتظار المتابعة.' : 'لا توجد ملاحظات في هذه القائمة.'}</p>
-        : shown.filter(n => !isAdmin || !teacherUid || n.teacherUid === teacherUid).map(n =>
+        : shown.map(n =>
           <NoteCard key={n.id} note={n} schoolId={schoolId} isAdmin={isAdmin}
             savedPhone={contacts[n.teacherUid] || ''} onSavePhone={saveContact} contactMode={contactMode} onOpenReport={onOpenReport} />)}
     </div>}
