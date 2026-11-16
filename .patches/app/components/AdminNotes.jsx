@@ -125,6 +125,64 @@ function NoteCard({ note, schoolId, isAdmin, savedPhone = '', onSavePhone, conta
   </article>;
 }
 
+const fmtTime = ts => ts?.toDate?.().toLocaleString('ar-SA') || '';
+function adminStatus(note) {
+  if (readAutoContext(note.context)) {
+    return note.autoState === 'complete' ? 'تم التنفيذ وفق بيانات منجزي' : note.autoState === 'progress' ? 'جارٍ التنفيذ'
+      : note.autoState === 'unverified' ? 'تعذّر التحقق آليًا' : 'بانتظار التنفيذ';
+  }
+  if (note.kind === 'action') return note.completedAt ? 'أفادت المعلمة بإتمام الإجراء' : 'بانتظار الإجراء';
+  return note.readAt ? 'تم الاطلاع' : 'لم يُطّلع عليها';
+}
+const chip = { padding: '6px 11px', borderRadius: 8, border: `1px solid ${colors.border}`, background: '#fff', color: colors.ink, cursor: 'pointer', fontSize: 13, textDecoration: 'none', display: 'inline-block' };
+
+// Admin card: compact summary, details on demand, one-tap WhatsApp from the saved directory number.
+function AdminNoteCard({ note, savedPhone = '', onNeedPhone, onOpenReport }) {
+  const [expanded, setExpanded] = useState(false);
+  const [error, setError] = useState('');
+  const tracked = readAutoContext(note.context);
+  const auto = note.autoResult;
+  const status = adminStatus(note);
+  const pending = needsFollowUp(note);
+  const accent = pending ? (note.autoState === 'unverified' ? '#9aa39e' : '#b9433b') : '#2f8a5b';
+  let whatsAppUrl = '';
+  if (savedPhone) { try { whatsAppUrl = noteWhatsAppUrl(savedPhone, note, window.location.href); } catch { whatsAppUrl = ''; } }
+  const readLine = !note.readAt ? 'لم تطّلع بعد' : note.reply ? 'اطّلعت وردّت' : 'اطّلعت · لا يوجد رد';
+  return <article style={{ border: `1px solid ${colors.border}`, borderRight: `4px solid ${accent}`, borderRadius: 10, padding: 12, marginBottom: 10, background: '#fff' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <strong>{note.teacherName}</strong>
+      <span style={{ fontSize: 12, fontWeight: 700, color: pending ? '#a82e2a' : '#0b6b3b' }}>{status}</span>
+    </div>
+    <div style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }}>{visibleNoteContext(note.context) || 'ملاحظة عامة'} · {note.kind === 'action' ? 'يتطلب إجراء' : 'للاطلاع'}</div>
+    <div style={{ fontSize: 12, marginTop: 3, color: note.readAt ? colors.textMuted : '#94641e' }}>{readLine}</div>
+    <div style={{ display: 'flex', gap: 6, marginTop: 9, flexWrap: 'wrap' }}>
+      <button type="button" style={chip} aria-expanded={expanded} onClick={() => setExpanded(v => !v)}>{expanded ? 'إخفاء التفاصيل' : 'التفاصيل'}</button>
+      {whatsAppUrl
+        ? <a style={chip} href={whatsAppUrl} target="_blank" rel="noopener noreferrer">واتساب</a>
+        : <button type="button" style={chip} onClick={() => { setError(''); onNeedPhone(note.teacherUid); }}>واتساب</button>}
+    </div>
+    {expanded && <div style={{ marginTop: 10, borderTop: `1px solid ${colors.border}`, paddingTop: 10, fontSize: 13 }}>
+      <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', margin: '0 0 4px', fontSize: 14 }}>{note.text}</p>
+      <small style={{ color: colors.textMuted }}>أُرسلت: {fmtTime(note.createdAt) || 'جارٍ تأكيد الحفظ…'}</small>
+      {tracked && <div style={{ margin: '10px 0', padding: 10, background: auto?.state === 'complete' ? '#eff8f2' : '#f5f7f6', borderRadius: 8 }}>
+        <strong>متابعة آلية: {AUTO_ACTIONS[tracked.action]}</strong>
+        <div style={{ margin: '5px 0' }}>{status}{auto?.reason ? ' — ' + auto.reason : ''}</div>
+        {auto?.evidence && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span>الشاهد: {auto.evidence.weekName} ({auto.evidence.recorded} من {auto.evidence.total} رصدًا)</span>
+          {onOpenReport && <button type="button" style={{ ...chip, padding: '5px 9px' }} onClick={() => onOpenReport({ ...auto.evidence, assignmentId: note.assignmentId, teacherName: note.teacherName, className: visibleNoteContext(note.context).split(' · ')[0], direct: true })}>فتح الشاهد</button>}
+        </div>}
+      </div>}
+      <div style={{ marginTop: 8 }}>{note.readAt ? 'اطّلعت المعلمة: ' + fmtTime(note.readAt) : 'لم تطّلع المعلمة بعد'}</div>
+      {note.completedAt && <div style={{ marginTop: 4 }}>أفادت بإتمام الإجراء: {fmtTime(note.completedAt)}</div>}
+      {note.reply && <div style={{ marginTop: 8, padding: 10, background: '#f7faf8', borderRadius: 8 }}>
+        <strong>رد المعلمة</strong>{note.repliedAt && <small style={{ color: colors.textMuted }}> · {fmtTime(note.repliedAt)}</small>}
+        <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginTop: 4 }}>{note.reply}</div>
+      </div>}
+    </div>}
+    {error && <p role="alert" style={{ color: colors.red }}>{error}</p>}
+  </article>;
+}
+
 export default function AdminNotes({ schoolId, teachers = [], assignments = [], classes = [], isAdmin = false, onOpenReport }) {
   const { profile } = useAuth();
   const [notes, setNotes] = useState([]);
@@ -133,7 +191,8 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
   const [autoError, setAutoError] = useState('');
   const [refreshTick, setRefreshTick] = useState(0);
   const [reportTeacher, setReportTeacher] = useState('');
-  const [reportState, setReportState] = useState('all');
+  const [showContacts, setShowContacts] = useState(false);
+  const contactsRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(isAdmin || new URLSearchParams(window.location.search).get('notes') === '1');
@@ -227,9 +286,14 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
   const infoUnread = enriched.filter(n => n.kind === 'info' && !n.readAt).length;
   const pendingCount = enriched.filter(needsFollowUp).length;
   const completedCount = enriched.filter(isFinished).length;
-  const shown = enriched.filter(n => filter === 'all' || (filter === 'pending' ? needsFollowUp(n) : isFinished(n)));
+  const byTeacher = enriched.filter(n => !isAdmin || !reportTeacher || n.teacherUid === reportTeacher);
+  const shown = byTeacher.filter(n => filter === 'all' || (filter === 'pending' ? needsFollowUp(n) : isFinished(n)));
+  const reportRows = shown;
+  function needPhone(uid) {
+    setShowContacts(true); setContactTeacherUid(uid); setContactMessage('احفظي رقم واتساب المعلمة أولًا، ثم اضغطي «واتساب» على الملاحظة.');
+    setTimeout(() => contactsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 50);
+  }
 
-  const reportRows = enriched.filter(n => (!reportTeacher || n.teacherUid === reportTeacher) && (reportState === 'all' || (reportState === 'pending' ? needsFollowUp(n) : reportState === 'complete' ? isFinished(n) : n.autoState === 'progress')));
   function printReport() {
     const popup = window.open('', '_blank');
     if (!popup) return;
@@ -238,58 +302,36 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
     popup.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير متابعة الملاحظات الإدارية</title><style>body{font-family:Tahoma,Arial,sans-serif;color:#23352b;padding:22px}h1{text-align:center;font-size:21px}p{text-align:center}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ccd7d0;padding:8px;vertical-align:top}th{background:#e8f1eb}@page{size:A4 landscape;margin:12mm}@media print{button{display:none}}</style></head><body><h1>تقرير متابعة الملاحظات الإدارية — منجزي</h1><p>تقرير آلي بحسب بيانات الرصد المسجلة وقت الإصدار · مجموع الملاحظات: '+reportRows.length+'</p><table><thead><tr><th>المعلمة</th><th>سياق التقرير</th><th>حالة المتابعة</th><th>الشاهد</th><th>رد المعلمة</th></tr></thead><tbody>'+rows+'</tbody></table><p>تعني حالة «تم التنفيذ وفق بيانات منجزي» تحقق شروط الرصد الآلي، ولا تعني مراجعة إدارية مستقلة.</p><button onclick="window.print()">طباعة / حفظ PDF</button></body></html>');
     popup.document.close();
   }
-    return <section dir="rtl" style={{ margin: '16px 0' }}>
-    {!isAdmin && !loading && !error && urgentCount > 0 && <div role="status" style={{ border: '1px solid #d77a74', borderRight: '5px solid #b9433b', borderRadius: 10, padding: '14px 16px', marginBottom: 12, background: '#fff5f3', color: '#7f2925' }}>
-      <div style={{ fontWeight: 800, fontSize: 16 }}>⚠ تنبيه من إدارة المدرسة</div>
-      <p style={{ margin: '8px 0 12px', fontSize: 14 }}>لديك {urgentCount} {urgentCount === 1 ? 'ملاحظة إدارية تتطلب إجراءً' : 'ملاحظات إدارية تتطلب إجراءً'}{unread > 0 ? `، منها ${unread} لم يُطّلع عليها بعد` : ''}.</p>
-      <button type="button" onClick={() => { setFilter('pending'); setOpen(true); }} style={{ ...button, background: '#a8322e', borderColor: '#a8322e' }}>عرض الملاحظات والتفاصيل</button>
-    </div>}
-    {!isAdmin && !loading && !error && urgentCount === 0 && infoUnread > 0 && <div role="status" style={{ border: '1px solid #e3c28c', borderRight: '5px solid #b78328', borderRadius: 10, padding: 14, marginBottom: 12, background: '#fff9ed', color: '#76501b' }}>
-      <strong>🔔 ملاحظة إدارية للاطلاع</strong>
-      <p style={{ margin: '7px 0 10px', fontSize: 13 }}>لديك {infoUnread} {infoUnread === 1 ? 'ملاحظة جديدة' : 'ملاحظات جديدة'} من إدارة المدرسة.</p>
-      <button type="button" onClick={() => { setFilter('all'); setOpen(true); }} style={{ ...button, background: '#94641e', borderColor: '#94641e' }}>عرض الملاحظات</button>
-    </div>}
-    <button type="button" style={{ ...button, width: '100%', textAlign: 'right', background: !isAdmin && urgentCount > 0 ? '#a8322e' : !isAdmin && infoUnread > 0 ? '#94641e' : colors.primary }}  aria-expanded={open} onClick={() => setOpen(!open)}>
-      ملاحظات الإدارة {loading ? '…' : `(${unread} غير مقروءة · ${pendingCount} بانتظار المتابعة)`}{error ? ' — تعذّر التحديث' : ''}
-    </button>
-    {isAdmin && <section style={{ ...box, background: '#f7faf8', marginTop: 12 }}>
-      <h3 style={{ margin: '0 0 8px' }}>تقرير متابعة الملاحظات الإدارية</h3>
-      <p style={{ fontSize: 12, marginTop: 0, color: colors.textMuted }}>الحالات الآلية محسوبة من نتائج الرصد والربط الموثق، ولا تتطلب تأكيدًا من المعلمة.</p>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10, fontSize: 13 }}>
-        <span>الإجمالي: <b>{enriched.length}</b></span><span>بانتظار المتابعة: <b>{pendingCount}</b></span><span>تمت: <b>{completedCount}</b></span><span>تنفيذ آلي مكتمل: <b>{enriched.filter(n => n.autoState === 'complete').length}</b></span>
-      </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <label style={{ flex: '1 1 160px' }}>المعلمة
-          <select style={field} value={reportTeacher} onChange={e => setReportTeacher(e.target.value)}>
-            <option value="">جميع المعلمات</option>{teachers.map(t => <option key={t.uid} value={t.uid}>{t.displayName}</option>)}
-          </select>
-        </label>
-        <label style={{ flex: '1 1 160px' }}>الحالة
-          <select style={field} value={reportState} onChange={e => setReportState(e.target.value)}>
-            <option value="all">جميع الحالات</option><option value="pending">بانتظار المتابعة</option><option value="progress">جارٍ التنفيذ</option><option value="complete">المكتملة</option>
-          </select>
-        </label>
-      </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button type="button" style={secondary} disabled={autoChecking} onClick={() => { forceRef.current = true; setRefreshTick(t => t + 1); }}>{autoChecking ? 'جارٍ التحقق…' : 'تحديث الحالات من الرصد'}</button>
-        <button type="button" style={button} onClick={printReport}>طباعة التقرير / حفظ PDF</button>
-      </div>
-      {autoError && <p role="alert" style={{ color: colors.red }}>{autoError}</p>}
-      <div style={{ marginTop: 12, display: 'grid', gap: 7 }}>
-        {reportRows.map(n => <div key={n.id} style={{ background: '#fff', border: '1px solid #dce5de', borderRadius: 8, padding: 9 }}>
-          <strong>{n.teacherName}</strong> <small>— {visibleNoteContext(n.context)}</small>
-          <div style={{ marginTop: 4, fontSize: 12, color: n.autoState === 'complete' ? '#0b6b3b' : colors.ink }}>
-            {n.autoState === 'complete' ? 'تم التنفيذ وفق بيانات منجزي' : n.autoState === 'progress' ? 'جارٍ التنفيذ' : n.autoState === 'unverified' ? 'تعذّر التحقق الآلي' : isFinished(n) ? 'مكتملة بإفادة المعلمة' : 'بانتظار المتابعة'}
-            {n.autoResult?.evidence ? ' · الشاهد: ' + n.autoResult.evidence.weekName : ''}
-          </div>
-          {n.autoResult?.evidence && onOpenReport && <button type="button" style={{ ...secondary, padding: '5px 9px', marginTop: 6 }} onClick={() => onOpenReport({ ...n.autoResult.evidence, assignmentId: n.assignmentId, teacherName: n.teacherName, className: visibleNoteContext(n.context).split(' · ')[0], direct: true })}>فتح تقرير الشاهد</button>}
-        </div>)}
-      </div>
-    </section>}
-        {open && <div style={{ marginTop: 12 }}>
-      {isAdmin && <>
-        <details style={box}>
-          <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>دليل أرقام واتساب المعلمات ({Object.keys(contacts).length} محفوظ)</summary>
+  const filterBtn = (key, label) => <button type="button" style={filter === key ? button : secondary} onClick={() => setFilter(key)}>{label}</button>;
+  if (isAdmin) return <section dir="rtl" style={{ margin: '16px 0' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginBottom: 12 }}>
+      <button type="button" onClick={() => setFilter('pending')} style={{ textAlign: 'right', border: '1px solid #f0c9c5', background: '#fff5f3', borderRadius: 10, padding: '10px 12px', cursor: 'pointer', color: '#8b2d29' }}>
+        <div style={{ fontSize: 12 }}>بانتظار المتابعة</div><div style={{ fontSize: 22, fontWeight: 700 }}>{loading ? '…' : byTeacher.filter(needsFollowUp).length}</div>
+      </button>
+      <button type="button" onClick={() => setFilter('done')} style={{ textAlign: 'right', border: '1px solid #cfe6d8', background: '#f1f9f4', borderRadius: 10, padding: '10px 12px', cursor: 'pointer', color: '#0b5c33' }}>
+        <div style={{ fontSize: 12 }}>مكتملة</div><div style={{ fontSize: 22, fontWeight: 700 }}>{loading ? '…' : byTeacher.filter(isFinished).length}</div>
+      </button>
+    </div>
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+      {filterBtn('pending', 'بانتظار المتابعة')}{filterBtn('done', 'المكتملة')}{filterBtn('all', 'الكل')}
+      <select aria-label="تصفية حسب المعلمة" value={reportTeacher} onChange={e => setReportTeacher(e.target.value)}
+        style={{ flex: '1 1 140px', minWidth: 0, padding: 9, borderRadius: 8, border: `1px solid ${colors.border}`, font: 'inherit', background: '#fff' }}>
+        <option value="">جميع المعلمات</option>{teachers.map(t => <option key={t.uid} value={t.uid}>{t.displayName}</option>)}
+      </select>
+    </div>
+    {error && <p role="alert" style={{ color: colors.red }}>{error}</p>}
+    {autoError && <p role="alert" style={{ color: colors.red }}>{autoError}</p>}
+    {loading ? <p>جارٍ تحميل الملاحظات…</p> : !error && shown.length === 0
+      ? <p style={{ color: colors.textMuted, fontSize: 13 }}>{filter === 'pending' ? 'لا توجد ملاحظات بانتظار المتابعة.' : 'لا توجد ملاحظات في هذه القائمة.'} تُضاف الملاحظات من تبويب «متابعة المعلمات».</p>
+      : shown.map(n => <AdminNoteCard key={n.id} note={n} savedPhone={contacts[n.teacherUid] || ''} onNeedPhone={needPhone} onOpenReport={onOpenReport} />)}
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, marginBottom: 12 }}>
+      <button type="button" style={chip} onClick={printReport} disabled={!shown.length}>طباعة التقرير / PDF</button>
+      <button type="button" style={chip} disabled={autoChecking} onClick={() => { forceRef.current = true; setRefreshTick(t => t + 1); }}>{autoChecking ? 'جارٍ التحقق…' : 'تحديث الحالات'}</button>
+      <button type="button" style={chip} aria-expanded={showContacts} onClick={() => setShowContacts(v => !v)}>أرقام المعلمات ({Object.keys(contacts).length})</button>
+    </div>
+    {showContacts && <>
+        <section ref={contactsRef} style={box}>
+          <strong>أرقام واتساب المعلمات ({Object.keys(contacts).length} محفوظ)</strong>
           <p style={{ fontSize: 13 }}>احفظي رقم كل معلمة مرة واحدة، وسيُستخدم تلقائيًا عند إرسال ملاحظاتها.</p>
           <form onSubmit={saveDirectory}>
             <label>المعلمة
@@ -311,28 +353,31 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
               contactMode === 'loading' ? 'جارٍ التحقق من مزامنة الأرقام…' :
               'الأرقام المحلية متاحة، لكن المزامنة غير مفعّلة. يلزم نشر قواعد أرقام التواصل في Firebase.'}
           </p>
-        </details>
-        <p style={{ ...box, background: '#f7faf8', fontSize: 13, margin: '0 0 12px' }}>
-          تُضاف الملاحظات من تبويب «متابعة المعلمات» على تقرير قياس أو معالجة محدد، لتبقى كل ملاحظة مرتبطة بشاهدها.
-        </p>
-      </>}
+        </section>
+    </>}
+  </section>;
+  return <section dir="rtl" style={{ margin: '16px 0' }}>
+    {!isAdmin && !loading && !error && urgentCount > 0 && <div role="status" style={{ border: '1px solid #d77a74', borderRight: '5px solid #b9433b', borderRadius: 10, padding: '14px 16px', marginBottom: 12, background: '#fff5f3', color: '#7f2925' }}>
+      <div style={{ fontWeight: 800, fontSize: 16 }}>⚠ تنبيه من إدارة المدرسة</div>
+      <p style={{ margin: '8px 0 12px', fontSize: 14 }}>لديك {urgentCount} {urgentCount === 1 ? 'ملاحظة إدارية تتطلب إجراءً' : 'ملاحظات إدارية تتطلب إجراءً'}{unread > 0 ? `، منها ${unread} لم يُطّلع عليها بعد` : ''}.</p>
+      <button type="button" onClick={() => { setFilter('pending'); setOpen(true); }} style={{ ...button, background: '#a8322e', borderColor: '#a8322e' }}>عرض الملاحظات والتفاصيل</button>
+    </div>}
+    {!isAdmin && !loading && !error && urgentCount === 0 && infoUnread > 0 && <div role="status" style={{ border: '1px solid #e3c28c', borderRight: '5px solid #b78328', borderRadius: 10, padding: 14, marginBottom: 12, background: '#fff9ed', color: '#76501b' }}>
+      <strong>🔔 ملاحظة إدارية للاطلاع</strong>
+      <p style={{ margin: '7px 0 10px', fontSize: 13 }}>لديك {infoUnread} {infoUnread === 1 ? 'ملاحظة جديدة' : 'ملاحظات جديدة'} من إدارة المدرسة.</p>
+      <button type="button" onClick={() => { setFilter('all'); setOpen(true); }} style={{ ...button, background: '#94641e', borderColor: '#94641e' }}>عرض الملاحظات</button>
+    </div>}
+    <button type="button" style={{ ...button, width: '100%', textAlign: 'right', background: !isAdmin && urgentCount > 0 ? '#a8322e' : !isAdmin && infoUnread > 0 ? '#94641e' : colors.primary }}  aria-expanded={open} onClick={() => setOpen(!open)}>
+      ملاحظات الإدارة {loading ? '…' : `(${unread} غير مقروءة · ${pendingCount} بانتظار المتابعة)`}{error ? ' — تعذّر التحديث' : ''}
+    </button>
+    {open && <div style={{ marginTop: 12 }}>
       {error && <p role="alert" style={{ color: colors.red }}>{error}</p>}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-        <button type="button" style={filter === 'pending' ? button : secondary} onClick={() => setFilter('pending')}>
-          بانتظار المتابعة ({pendingCount})
-        </button>
-        <button type="button" style={filter === 'all' ? button : secondary} onClick={() => setFilter('all')}>
-          جميع الملاحظات ({notes.length})
-        </button>
-        <button type="button" style={filter === 'done' ? button : secondary} onClick={() => setFilter('done')}>
-          المكتملة ({completedCount})
-        </button>
+        {filterBtn('pending', `بانتظار المتابعة (${pendingCount})`)}{filterBtn('all', `جميع الملاحظات (${notes.length})`)}{filterBtn('done', `المكتملة (${completedCount})`)}
       </div>
       {loading ? <p>جارٍ تحميل الملاحظات…</p> : !error && shown.length === 0
         ? <p>{filter === 'pending' ? 'لا توجد ملاحظات بانتظار المتابعة.' : 'لا توجد ملاحظات في هذه القائمة.'}</p>
-        : shown.map(n =>
-          <NoteCard key={n.id} note={n} schoolId={schoolId} isAdmin={isAdmin}
-            savedPhone={contacts[n.teacherUid] || ''} onSavePhone={saveContact} contactMode={contactMode} onOpenReport={onOpenReport} />)}
+        : shown.map(n => <NoteCard key={n.id} note={n} schoolId={schoolId} isAdmin={false} />)}
     </div>}
   </section>;
 }

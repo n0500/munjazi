@@ -26,11 +26,14 @@ for (const [label, isAdmin, search] of [['admin', true, ''], ['teacher', false, 
   test(`notes renders for ${label}`, () => {
     globalThis.window = { location: { search } };
     const html = renderToStaticMarkup(React.createElement(AdminNotes, { schoolId: 'test-school', isAdmin }));
-    assert.match(html, /ملاحظات الإدارة/);
     if (isAdmin) {
-      // Notes are created only from measurement/remediation follow-up, not from a general form.
-      assert.match(html, /متابعة المعلمات/);
+      // Single list: summary, filters and footer actions; no general note form.
+      assert.match(html, /بانتظار المتابعة/);
+      assert.match(html, /أرقام المعلمات/);
       assert.doesNotMatch(html, /حفظ وإشعار المعلمة/);
+      assert.doesNotMatch(html, /تقرير متابعة الملاحظات الإدارية<\/h3>/);
+    } else {
+      assert.match(html, /ملاحظات الإدارة/);
     }
     if (search) assert.match(html, /جميع الملاحظات/);
   });
