@@ -61,7 +61,12 @@ function evidenceFrom(week, progress) {
 export function decideAutoStatus(action, source, candidates, noteTime) {
   if (!noteTime) return { state: 'unverified', reason: 'تعذّر تحديد تاريخ إرسال الملاحظة' };
   const eligible = action === 'completion' ? [source] : candidates;
-  if (!eligible.length) return { state: 'waiting', reason: action === 'completion' ? 'لم يبدأ تحديث الرصد بعد إرسال الملاحظة' : 'لم يُعثر على تقرير مرتبط موثق' };
+  // Waiting reasons tell the teacher exactly what completes the note.
+  const name = source?.week?.name ? '«' + source.week.name + '»' : 'الأسبوع المحدد';
+  const waitingReason = action === 'completion'
+    ? 'تكتمل تلقائيًا عند استكمال رصد ' + name
+    : 'تكتمل تلقائيًا عند رصد أسبوع معالجة مرتبط بـ' + name;
+  if (!eligible.length) return { state: 'waiting', reason: waitingReason };
   const completed = eligible.filter(e => e.progress.complete && e.progress.updatedAfterNotice);
   if (completed.length) {
     const hit = completed[completed.length - 1];
@@ -72,7 +77,7 @@ export function decideAutoStatus(action, source, candidates, noteTime) {
     const hit = progressed[progressed.length - 1];
     return { state: 'progress', evidence: evidenceFrom(hit.week, hit.progress), reason: 'رُصدت نتائج بعد الملاحظة ولم يكتمل الرصد' };
   }
-  return { state: 'waiting', reason: 'لا يوجد رصد جديد مثبت بعد تاريخ الملاحظة' };
+  return { state: 'waiting', reason: waitingReason };
 }
 
 export async function loadAutoNoteStatuses(schoolId, notes) {
