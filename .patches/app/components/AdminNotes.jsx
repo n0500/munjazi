@@ -30,6 +30,7 @@ const errorText = err => err?.code === 'permission-denied'
 function NoteCard({ note, schoolId, isAdmin, savedPhone = '', onSavePhone, contactMode, onOpenReport }) {
   const [reply, setReply] = useState(note.reply || '');
   const [phone, setPhone] = useState(savedPhone);
+  const [busy, setBusy] = useState(false);
   const [savingPhone, setSavingPhone] = useState(false);
   const [phoneNotice, setPhoneNotice] = useState('');
   const [error, setError] = useState('');
