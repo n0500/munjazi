@@ -29,7 +29,7 @@ for (const [label, isAdmin, search] of [['admin', true, ''], ['teacher', false, 
     if (isAdmin) {
       // Single list: summary, filters and footer actions; no general note form.
       assert.match(html, /بانتظار المتابعة/);
-      assert.match(html, /أرقام المعلمات/);
+      assert.doesNotMatch(html, /واتساب/);
       assert.doesNotMatch(html, /حفظ وإشعار المعلمة/);
       assert.doesNotMatch(html, /تقرير متابعة الملاحظات الإدارية<\/h3>/);
     } else {

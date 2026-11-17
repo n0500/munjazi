@@ -19,6 +19,8 @@ function readAutoCache(schoolId) {
 function writeAutoCache(schoolId, cache) {
   try { localStorage.setItem(AUTO_CACHE(schoolId), JSON.stringify(cache)); } catch { /* storage unavailable */ }
 }
+// WhatsApp sending is switched off for now; set to true to bring back the buttons and the numbers directory.
+const WHATSAPP_ENABLED = false;
 const AUTO_REFRESH_MIN_MS = 10 * 60 * 1000;
 // For the teacher, a note that cannot be verified automatically is not her fault and must not raise a red alert.
 const teacherAttention = note => needsFollowUp(note) && note.autoState !== 'unverified';
@@ -157,9 +159,9 @@ function AdminNoteCard({ note, savedPhone = '', onNeedPhone, onOpenReport }) {
     <div style={{ fontSize: 12, marginTop: 3, color: note.readAt ? colors.textMuted : '#94641e' }}>{readLine}</div>
     <div style={{ display: 'flex', gap: 6, marginTop: 9, flexWrap: 'wrap' }}>
       <button type="button" style={chip} aria-expanded={expanded} onClick={() => setExpanded(v => !v)}>{expanded ? 'إخفاء التفاصيل' : 'التفاصيل'}</button>
-      {whatsAppUrl
+      {WHATSAPP_ENABLED && (whatsAppUrl
         ? <a style={chip} href={whatsAppUrl} target="_blank" rel="noopener noreferrer">واتساب</a>
-        : <button type="button" style={chip} onClick={() => { setError(''); onNeedPhone(note.teacherUid); }}>واتساب</button>}
+        : <button type="button" style={chip} onClick={() => { setError(''); onNeedPhone(note.teacherUid); }}>واتساب</button>)}
     </div>
     {expanded && <div style={{ marginTop: 10, borderTop: `1px solid ${colors.border}`, paddingTop: 10, fontSize: 13 }}>
       <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', margin: '0 0 4px', fontSize: 14 }}>{note.text}</p>
@@ -254,6 +256,7 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
   }, [schoolId, trackedKey, refreshTick]);
     useEffect(() => {
     if (!isAdmin) return undefined;
+    if (!WHATSAPP_ENABLED) return undefined;
     return watchContactNumbers(schoolId, setContacts, setContactMode);
   }, [schoolId, isAdmin]);
   useEffect(() => {
@@ -327,9 +330,9 @@ export default function AdminNotes({ schoolId, teachers = [], assignments = [], 
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, marginBottom: 12 }}>
       <button type="button" style={chip} onClick={printReport} disabled={!shown.length}>طباعة التقرير / PDF</button>
       <button type="button" style={chip} disabled={autoChecking} onClick={() => { forceRef.current = true; setRefreshTick(t => t + 1); }}>{autoChecking ? 'جارٍ التحقق…' : 'تحديث الحالات'}</button>
-      <button type="button" style={chip} aria-expanded={showContacts} onClick={() => setShowContacts(v => !v)}>أرقام المعلمات ({Object.keys(contacts).length})</button>
+      {WHATSAPP_ENABLED && <button type="button" style={chip} aria-expanded={showContacts} onClick={() => setShowContacts(v => !v)}>أرقام المعلمات ({Object.keys(contacts).length})</button>}
     </div>
-    {showContacts && <>
+    {WHATSAPP_ENABLED && showContacts && <>
         <section ref={contactsRef} style={box}>
           <strong>أرقام واتساب المعلمات ({Object.keys(contacts).length} محفوظ)</strong>
           <p style={{ fontSize: 13 }}>احفظي رقم كل معلمة مرة واحدة، وسيُستخدم تلقائيًا عند إرسال ملاحظاتها.</p>
